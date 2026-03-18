@@ -20,20 +20,42 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         today = date.today()
+
         month_entries = EntryRecord.objects.all()
         month_sales = SaleRecord.objects.all()
         closings = MonthlyClosing.objects.filter(year=today.year, month=today.month)
-        if not user.is_manager and user.participant:
-            month_entries = month_entries.filter(participant=user.participant)
-            month_sales = month_sales.filter(participant=user.participant)
-            closings = closings.filter(participant=user.participant)
-        month_entries = month_entries.filter(movement_date__year=today.year, movement_date__month=today.month)
-        month_sales = month_sales.filter(movement_date__year=today.year, movement_date__month=today.month)
+
+        is_manager = getattr(user, 'is_manager', False)
+        is_auditor = getattr(user, 'is_auditor', False)
+        participant = getattr(user, 'participant', None)
+
+        if not is_manager and participant:
+            month_entries = month_entries.filter(participant=participant)
+            month_sales = month_sales.filter(participant=participant)
+            closings = closings.filter(participant=participant)
+
+        if not is_manager and not participant:
+            month_entries = EntryRecord.objects.none()
+            month_sales = SaleRecord.objects.none()
+            closings = MonthlyClosing.objects.none()
+
+        month_entries = month_entries.filter(
+            movement_date__year=today.year,
+            movement_date__month=today.month
+        )
+        month_sales = month_sales.filter(
+            movement_date__year=today.year,
+            movement_date__month=today.month
+        )
+
         ctx['entries_count'] = month_entries.count()
         ctx['sales_count'] = month_sales.count()
         ctx['entries_total'] = month_entries.aggregate(total=Sum('quantity'))['total'] or 0
         ctx['sales_total'] = month_sales.aggregate(total=Sum('quantity'))['total'] or 0
-        ctx['needs_correction'] = (month_entries.filter(status='needs_correction').count() + month_sales.filter(status='needs_correction').count())
+        ctx['needs_correction'] = (
+            month_entries.filter(status='needs_correction').count() +
+            month_sales.filter(status='needs_correction').count()
+        )
         ctx['current_closings'] = closings
         ctx['recent_entries'] = month_entries[:5]
         ctx['recent_sales'] = month_sales[:5]
