@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:720px;">
+  <h1>{% if form.instance.pk %}Editar participante{% else %}Novo participante{% endif %}</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn" type="submit">Salvar</button>
+    <a class="btn secondary" href="/participants/">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

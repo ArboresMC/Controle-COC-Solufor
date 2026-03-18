@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;align-items:center;">
+    <h1>Participantes</h1>
+    <a class="btn" href="/participants/new/">Novo participante</a>
+  </div>
+  <table>
+    <tr><th>Nome</th><th>CNPJ</th><th>Status</th><th>Responsável</th><th>E-mail</th><th></th></tr>
+    {% for p in participants %}
+    <tr><td>{{ p }}</td><td>{{ p.cnpj }}</td><td>{{ p.get_status_display }}</td><td>{{ p.contact_name }}</td><td>{{ p.contact_email }}</td><td><a href="/participants/{{ p.id }}/edit/">Editar</a></td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

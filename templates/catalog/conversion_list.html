@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;align-items:center;"><h1>Conversões de unidade</h1><a class="btn" href="/catalog/conversions/new/">Nova conversão</a></div>
+  <table>
+    <tr><th>Produto</th><th>Origem</th><th>Destino</th><th>Fator</th><th>Ativo</th><th></th></tr>
+    {% for item in conversions %}
+    <tr><td>{{ item.product }}</td><td>{{ item.get_from_unit_display }}</td><td>{{ item.get_to_unit_display }}</td><td>{{ item.factor }}</td><td>{% if item.active %}Sim{% else %}Não{% endif %}</td><td><a href="/catalog/conversions/{{ item.id }}/edit/">Editar</a></td></tr>
+    {% empty %}<tr><td colspan="6">Sem conversões cadastradas.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}
