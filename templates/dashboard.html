@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Painel</h1>
+<div class="grid">
+  <div class="card"><strong>Entradas no mês</strong><br>{{ entries_count }} registros<br><span class="muted">Total: {{ entries_total }}</span></div>
+  <div class="card"><strong>Saídas no mês</strong><br>{{ sales_count }} registros<br><span class="muted">Total: {{ sales_total }}</span></div>
+  <div class="card"><strong>Pendências</strong><br>{{ needs_correction }} registros com correção</div>
+  <div class="card"><strong>Fechamentos atuais</strong><br>{{ current_closings|length }} item(ns)</div>
+</div>
+<div class="actions" style="margin: 12px 0 18px;">
+  {% if user.is_participant_user %}
+    <a class="btn" href="/transactions/entries/new/">Nova entrada</a>
+    <a class="btn" href="/transactions/sales/new/">Nova saída</a>
+    <a class="btn secondary" href="/compliance/submit-current/">Encerrar mês</a>
+  {% endif %}
+</div>
+<div class="grid">
+  <div class="card">
+    <h2>Últimas entradas</h2>
+    <table>
+      <tr><th>Data</th><th>Documento</th><th>Produto</th><th>Qtd.</th></tr>
+      {% for item in recent_entries %}
+      <tr><td>{{ item.movement_date|date:"d/m/Y" }}</td><td>{{ item.document_number }}</td><td>{{ item.product }}</td><td>{{ item.quantity }}</td></tr>
+      {% empty %}<tr><td colspan="4">Sem registros.</td></tr>{% endfor %}
+    </table>
+  </div>
+  <div class="card">
+    <h2>Últimas saídas</h2>
+    <table>
+      <tr><th>Data</th><th>Documento</th><th>Produto</th><th>Qtd.</th></tr>
+      {% for item in recent_sales %}
+      <tr><td>{{ item.movement_date|date:"d/m/Y" }}</td><td>{{ item.document_number }}</td><td>{{ item.product }}</td><td>{{ item.quantity }}</td></tr>
+      {% empty %}<tr><td colspan="4">Sem registros.</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}
