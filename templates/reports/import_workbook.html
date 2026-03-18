@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:760px;">
+  <div class="actions" style="justify-content:space-between;align-items:center;">
+    <h1>Importar planilha</h1>
+    <a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a>
+  </div>
+  <p class="muted">Use as abas Entradas, Saidas e Transformacoes do modelo. Produtos e clientes podem ser criados automaticamente durante a importação.</p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn" type="submit">Importar</button>
+  </form>
+</div>
+{% endblock %}

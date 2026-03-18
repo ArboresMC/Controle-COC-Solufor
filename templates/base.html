@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal FSC</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fa; color: #1f2937; }
+    header { background: #14532d; color: white; padding: 14px 24px; }
+    nav a { color: white; margin-right: 16px; text-decoration: none; font-weight: bold; }
+    .container { max-width: 1180px; margin: 24px auto; padding: 0 16px; }
+    .card { background: white; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    table { width: 100%; border-collapse: collapse; background: white; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+    th { background: #ecfdf5; }
+    .btn { display: inline-block; padding: 10px 14px; background: #166534; color: white; border-radius: 8px; text-decoration: none; border: none; cursor: pointer; }
+    .btn.secondary { background: #475569; }
+    .btn.warning { background: #b45309; }
+    .muted { color: #64748b; }
+    .messages { list-style: none; padding: 0; }
+    .messages li { background: #dcfce7; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
+    form p { margin-bottom: 12px; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+    input[type='checkbox'] { width: auto; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .right { float:right; }
+    .badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:bold; }
+    .badge.success, .balance.success { background:#dcfce7; color:#166534; }
+    .badge.warning, .balance.warning { background:#fef3c7; color:#92400e; }
+    .badge.danger, .balance.danger { background:#fee2e2; color:#991b1b; }
+    .balance { border-radius: 8px; padding: 6px 10px; display:inline-block; min-width: 110px; text-align:center; }
+    .helptext { display:block; color:#64748b; font-size:12px; margin-top:4px; }
+  </style>
+</head>
+<body>
+<header>
+  <nav>
+    <a href="/">Portal FSC</a>
+    {% if user.is_authenticated %}
+      <a href="/transactions/entries/">Entradas</a>
+      <a href="/transactions/sales/">Saídas</a>
+      <a href="/transactions/transformations/">Transformações</a>
+      <a href="/compliance/">Fechamentos</a>
+      <a href="/reports/import/">Importar Excel</a>
+      {% if user.is_manager %}
+        <a href="/participants/">Participantes</a>
+        <a href="/catalog/products/">Produtos</a>
+        <a href="/catalog/conversions/">Conversões</a>
+        <a href="/catalog/transformation-rules/">Rendimentos</a>
+        <a href="/catalog/counterparties/">Clientes/Fornec.</a>
+        <a href="/users/">Usuários</a>
+        <a href="/transactions/manager/review/entries/">Revisar entradas</a>
+        <a href="/transactions/manager/review/sales/">Revisar saídas</a>
+        <a href="/compliance/manager/">Fechamentos gestão</a>
+        <a href="/reports/traceability/">Rastreabilidade</a>
+        <a href="/reports/consolidated.xlsx">Relatório FSC</a>
+        <a href="/admin/">Admin</a>
+      {% endif %}
+      <span class="right">{{ user.username }} · <a style="color:white" href="/logout/">Sair</a></span>
+    {% else %}
+      <span class="right"><a style="color:white" href="/login/">Entrar</a></span>
+    {% endif %}
+  </nav>
+</header>
+<div class="container">
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

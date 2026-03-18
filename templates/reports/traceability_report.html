@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;align-items:center;">
+    <h1>Rastreabilidade</h1>
+    <a class="btn" href="/reports/consolidated.xlsx">Baixar relatório FSC</a>
+  </div>
+  <form method="get" class="actions" style="margin-bottom:16px;">
+    <select name="participant" style="max-width:280px;">
+      <option value="">Todos os participantes</option>
+      {% for p in participants %}
+      <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">Filtrar</button>
+  </form>
+  <table>
+    <tr><th>Participante</th><th>Produto</th><th>Uso</th><th>Origem consumida</th><th>Quantidade</th></tr>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.participant }}</td>
+      <td>{{ row.product }}</td>
+      <td>{{ row.use_type|title }} · {{ row.use_label }}<br><span class="muted">{{ row.use_date|date:"d/m/Y" }}</span></td>
+      <td>{{ row.source_label }}<br><span class="muted">{{ row.source_date|date:"d/m/Y" }}</span></td>
+      <td>{{ row.quantity }} {{ row.unit }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="muted">Nenhum vínculo de rastreabilidade encontrado.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

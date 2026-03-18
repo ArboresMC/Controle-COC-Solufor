@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="actions" style="justify-content:space-between;align-items:center;">
+    <h1>Transformações</h1>
+    {% if user.is_participant_user %}<a class="btn" href="/transactions/transformations/new/">Nova transformação</a>{% endif %}
+  </div>
+  <table>
+    <tr><th>Data</th><th>Participante</th><th>Origem</th><th>Destino</th><th>Fator</th><th></th></tr>
+    {% for item in records %}
+    <tr>
+      <td>{{ item.movement_date|date:"d/m/Y" }}</td>
+      <td>{{ item.participant }}</td>
+      <td>{{ item.source_product }} — {{ item.source_quantity }} {{ item.source_unit }}<br><span class="muted">{{ item.source_quantity_base }} {{ item.source_product.get_unit_display }}</span></td>
+      <td>{{ item.target_product }} — {{ item.target_quantity_base }} {{ item.target_product.get_unit_display }}</td>
+      <td>{{ item.yield_factor_snapshot }}</td>
+      <td>{% if user.is_participant_user %}<a href="/transactions/transformations/{{ item.id }}/edit/">Editar</a>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="6">Sem registros.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}
