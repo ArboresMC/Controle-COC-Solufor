@@ -1,8 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card" style="max-width:760px;">
-  <h1>{% if form.instance.pk %}Editar{% else %}Nova{% endif %} regra de rendimento</h1>
-  <p class="muted">Exemplo: 1,000 m³ de tora gera 0,500 m³ de madeira serrada. Nesse caso o fator é 0,500.</p>
-  <form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn" type="submit">Salvar</button></form>
-</div>
-{% endblock %}
