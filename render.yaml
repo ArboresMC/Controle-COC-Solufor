@@ -2,7 +2,7 @@ services:
   - type: web
     name: portal-fsc
     env: python
-    plan: starter
+    plan: free
     buildCommand: ./build.sh
     startCommand: gunicorn config.wsgi:application --log-file -
     autoDeploy: true
@@ -26,4 +26,4 @@ services:
 
 databases:
   - name: portal-fsc-db
-    plan: starter
+    plan: free
