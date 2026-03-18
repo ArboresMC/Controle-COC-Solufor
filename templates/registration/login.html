@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="login-shell">
+  <div class="login-hero">
+    <div class="kicker">Acesso seguro</div>
+    <h1>Entre no portal do grupo FSC</h1>
+    <p>Use seu usuário para registrar compras, vendas, transformações, importações por planilha e acompanhar o saldo elegível em tempo real.</p>
+    <ul>
+      <li>Controle por participante</li>
+      <li>Conversão automática de unidades</li>
+      <li>Rastreabilidade entre entrada, transformação e saída</li>
+      <li>Fechamento mensal e relatórios prontos para auditoria</li>
+    </ul>
+  </div>
+  <div class="card login-card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Login</div>
+        <h2 class="card-title">Acessar sistema</h2>
+        <p class="card-subtitle">Insira seu usuário e senha para continuar.</p>
+      </div>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions">
+        <button type="submit" class="btn">Entrar</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

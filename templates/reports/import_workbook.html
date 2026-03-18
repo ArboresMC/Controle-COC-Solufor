@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="split">
+  <div class="card">
+    <div class="card-header"><div><div class="kicker">Importação</div><h2 class="card-title">Importar planilha</h2><p class="card-subtitle">Envie o arquivo no modelo oficial para registrar entradas, saídas e transformações em lote.</p></div><a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a></div>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Importar arquivo</button></div></form>
+  </div>
+  <div class="card soft"><div class="stack"><div class="info-box"><strong>Abas esperadas</strong><br><span class="muted">Use as abas Entradas, Saidas e Transformacoes do arquivo modelo.</span></div><div class="info-box"><strong>Cadastro rápido</strong><br><span class="muted">Produtos e clientes podem ser criados automaticamente durante a importação.</span></div></div></div>
+</div>
+{% endblock %}
