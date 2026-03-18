@@ -1,15 +1,23 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.contrib.auth import views as auth_views
+from django.shortcuts import redirect
 from django.urls import include, path
-from transactions.views import DashboardView
+
+
+def home_redirect(request):
+    return redirect('/admin/')
+
+
+def login_redirect(request):
+    return redirect('/admin/login/?next=/admin/')
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
-    path('', DashboardView.as_view(), name='dashboard'),
+    path('login/', login_redirect, name='login'),
+    path('logout/', home_redirect, name='logout'),
+    path('', home_redirect, name='dashboard'),
     path('participants/', include('participants.urls')),
     path('users/', include('accounts.urls')),
     path('catalog/', include('catalog.urls')),
