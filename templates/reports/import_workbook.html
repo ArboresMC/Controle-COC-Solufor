@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Importação inteligente</div>
+        <h2 class="card-title">Validar e importar planilha</h2>
+        <p class="card-subtitle">Envie a planilha no modelo oficial. O sistema valida linha por linha antes de importar.</p>
+      </div>
+      <a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a>
+    </div>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions">
+        <button class="btn secondary" type="submit" name="action" value="validate">Validar planilha</button>
+        <button class="btn" type="submit" name="action" value="import">Importar planilha</button>
+      </div>
+    </form>
+  </div>
+  <div class="card soft">
+    <div class="stack">
+      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes da importação.</span></div>
+      <div class="info-box"><strong>Cadastro automático</strong><br><span class="muted">Produtos, clientes e fornecedores podem ser criados automaticamente conforme o arquivo.</span></div>
+      <div class="info-box"><strong>Planilha modelo</strong><br><span class="muted">Use as abas Entradas, Saidas e Transformacoes do modelo oficial.</span></div>
+    </div>
+  </div>
+</div>
+
+{% if preview_errors %}
+<div class="card">
+  <div class="card-header"><div><div class="kicker">Inconsistências</div><h2 class="card-title">Erros encontrados na validação</h2></div></div>
+  <ul class="messages">
+    {% for error in preview_errors %}<li>{{ error }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if preview.entries or preview.sales or preview.transformations %}
+<div class="card">
+  <div class="card-header"><div><div class="kicker">Prévia</div><h2 class="card-title">Resumo da planilha validada</h2><p class="card-subtitle">Confira abaixo o que o sistema identificou antes de importar.</p></div></div>
+  <div class="grid metrics">
+    <div class="card metric-card"><div class="metric-label">Entradas</div><div class="metric-value">{{ preview.entries|length }}</div></div>
+    <div class="card metric-card"><div class="metric-label">Saídas</div><div class="metric-value">{{ preview.sales|length }}</div></div>
+    <div class="card metric-card"><div class="metric-label">Transformações</div><div class="metric-value">{{ preview.transformations|length }}</div></div>
+    <div class="card metric-card"><div class="metric-label">Erros</div><div class="metric-value">{{ preview_errors|length }}</div></div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
