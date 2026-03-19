@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div><div class="kicker">Relatório</div><h2 class="card-title">Rastreabilidade compra → transformação → venda</h2><p class="card-subtitle">Visualize o vínculo entre fornecedor, lote de entrada, transformação e cliente atendido.</p></div>
+    <a class="btn" href="/reports/consolidated.xlsx">Baixar relatório FSC</a>
+  </div>
+  <form method="get" class="actions" style="margin-bottom:16px;">
+    <select name="participant" style="max-width:320px;">
+      <option value="">Todos os participantes</option>
+      {% for p in participants %}
+      <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">Filtrar</button>
+  </form>
+  {% if rows %}
+  <div class="table-wrap"><table>
+    <tr><th>Participante</th><th>Produto</th><th>Uso</th><th>Fornecedor origem</th><th>Cliente / destino</th><th>Origem consumida</th><th>Quantidade</th></tr>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.participant }}</td>
+      <td><strong>{{ row.product }}</strong></td>
+      <td>{{ row.use_type|title }} · {{ row.use_label }}<br><span class="muted">{{ row.use_date|date:"d/m/Y" }}</span></td>
+      <td>{{ row.supplier }}</td>
+      <td>{{ row.counterparty }}</td>
+      <td>{{ row.source_label }}<br><span class="muted">{{ row.source_date|date:"d/m/Y" }}</span></td>
+      <td>{{ row.quantity }} {{ row.unit }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">Nenhum vínculo de rastreabilidade encontrado.</div>{% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div><div class="kicker">Saldo por entrada</div><h2 class="card-title">Controle por compra / lote de entrada</h2><p class="card-subtitle">Veja quanto cada compra já abasteceu em vendas ou transformações e quanto ainda resta disponível.</p></div>
+  </div>
+  {% if entry_balances %}
+  <div class="table-wrap"><table>
+    <tr><th>Participante</th><th>Entrada</th><th>Fornecedor</th><th>Produto</th><th>Qtd entrada</th><th>Vendida</th><th>Transformada</th><th>Saldo remanescente</th><th>Clientes atendidos</th></tr>
+    {% for row in entry_balances %}
+    <tr>
+      <td>{{ row.participant }}</td>
+      <td>{{ row.entry.document_number }}<br><span class="muted">{{ row.movement_date|date:"d/m/Y" }}</span></td>
+      <td>{{ row.supplier }}</td>
+      <td>{{ row.product }}</td>
+      <td>{{ row.quantity_total }} {{ row.unit }}</td>
+      <td>{{ row.quantity_sold }} {{ row.unit }}</td>
+      <td>{{ row.quantity_transformed }} {{ row.unit }}</td>
+      <td><strong>{{ row.quantity_remaining }} {{ row.unit }}</strong></td>
+      <td>{{ row.customers|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">Nenhuma entrada rastreável encontrada.</div>{% endif %}
+</div>
+{% endblock %}
