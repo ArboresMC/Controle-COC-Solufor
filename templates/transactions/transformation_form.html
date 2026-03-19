@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="split">
+  <div class="card">
+    <div class="card-header"><div><div class="kicker">Transformação</div><h2 class="card-title">Nova transformação</h2><p class="card-subtitle">Selecione o produto origem e o sistema calculará o produto destino conforme a regra de rendimento cadastrada.</p></div></div>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions"><button class="btn" type="submit">Salvar transformação</button><a class="btn secondary" href="javascript:history.back()">Cancelar</a></div>
+    </form>
+  </div>
+  <div class="card soft">
+    <div class="stack">
+      <div class="info-box"><strong>Saldo técnico</strong><br><span class="muted">A transformação respeita o saldo disponível do produto origem.</span></div>
+      <div class="info-box"><strong>Rendimento</strong><br><span class="muted">A quantidade do destino é calculada com base no fator da regra cadastrada.</span></div>
+      <div class="info-box"><strong>Rastreabilidade</strong><br><span class="muted">As quantidades consumidas e geradas ficam disponíveis no relatório de rastreabilidade.</span></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
