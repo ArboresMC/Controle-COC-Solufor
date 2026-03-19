@@ -1,30 +1,28 @@
 from django.db import migrations
+from django.contrib.auth.hashers import make_password
 
 
 def create_or_update_admin(apps, schema_editor):
     User = apps.get_model('accounts', 'User')
 
-    user, _ = User.objects.get_or_create(
+    user, created = User.objects.get_or_create(
         username='admin',
         defaults={
             'email': 'admin@solufor.com',
-            'role': 'manager',
             'is_staff': True,
             'is_superuser': True,
             'is_active': True,
-            'must_change_password': False,
+            'password': make_password('12345678'),
         },
     )
 
-    user.email = 'admin@solufor.com'
-    user.role = 'manager'
-    user.is_staff = True
-    user.is_superuser = True
-    user.is_active = True
-    if hasattr(user, 'must_change_password'):
-        user.must_change_password = False
-    user.set_password('12345678')
-    user.save()
+    if not created:
+        user.email = 'admin@solufor.com'
+        user.is_staff = True
+        user.is_superuser = True
+        user.is_active = True
+        user.password = make_password('12345678')
+        user.save(update_fields=['email', 'is_staff', 'is_superuser', 'is_active', 'password'])
 
 
 class Migration(migrations.Migration):
