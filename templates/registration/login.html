@@ -1,35 +1,72 @@
-{% load static %}
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - Solufor Soluções Florestais</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      color: #1f2937;
+    }
+    .wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .box {
+      width: 100%;
+      max-width: 420px;
+      background: white;
+      border-radius: 14px;
+      padding: 28px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.08);
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 28px;
+    }
+    p {
+      margin-top: 0;
+      color: #64748b;
+    }
+    input, select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      border: 0;
+      border-radius: 8px;
+      background: #166534;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="box">
+      <h1>Solufor Soluções Florestais</h1>
+      <p>Acesse o portal operacional do grupo certificado.</p>
 
-{% block content %}
-<section class="login-shell">
-  <div class="login-hero">
-    <img class="login-logo" src="{% static 'img/solufor-logo.png' %}" alt="Solufor Soluções Florestais">
-    <div class="kicker">Acesso seguro</div>
-    <h1>Solufor Soluções Florestais</h1>
-    <p>Entre no ambiente operacional da Solufor para registrar compras, vendas, transformações, importações por planilha e acompanhar o saldo elegível do grupo certificado em tempo real.</p>
-    <ul>
-      <li>Controle por participante do grupo certificado</li>
-      <li>Conversão automática de unidades e rendimentos</li>
-      <li>Rastreabilidade entre entrada, transformação e saída</li>
-      <li>Fechamento mensal e relatórios prontos para auditoria</li>
-    </ul>
-  </div>
-  <div class="card login-card">
-    <div class="card-header">
-      <div>
-        <div class="kicker">Login</div>
-        <h2 class="card-title">Acessar sistema</h2>
-        <p class="card-subtitle">Use seu usuário e senha para entrar no portal operacional da Solufor.</p>
-      </div>
+      <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Entrar</button>
+      </form>
     </div>
-    <form method="post">
-      {% csrf_token %}
-      {{ form.as_p }}
-      <div class="actions">
-        <button type="submit" class="btn">Entrar</button>
-      </div>
-    </form>
   </div>
-</section>
-{% endblock %}
+</body>
+</html>
