@@ -1,6 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card"><div class="listing-head"><div><div class="kicker">Cadastros auxiliares</div><h2 class="card-title">Clientes e fornecedores</h2><p class="card-subtitle">Contrapartes usadas em documentos de entrada e saída.</p></div><a class="btn" href="/catalog/counterparties/new/">Novo cadastro</a></div>
-{% if counterparties %}<div class="table-wrap"><table><tr><th>Nome</th><th>Documento</th><th>Tipo</th><th>Participante</th><th></th></tr>{% for c in counterparties %}<tr><td><strong>{{ c.name }}</strong></td><td>{{ c.document_id|default:'-' }}</td><td>{{ c.get_type_display }}</td><td>{{ c.participant|default:'-' }}</td><td><a class="inline-link" href="/catalog/counterparties/{{ c.id }}/edit/">Editar</a></td></tr>{% endfor %}</table></div>{% else %}<div class="empty-state">Nenhum cliente ou fornecedor cadastrado.</div>{% endif %}
-</div>
-{% endblock %}
