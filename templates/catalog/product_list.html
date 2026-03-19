@@ -1,6 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card"><div class="listing-head"><div><div class="kicker">Cadastro mestre</div><h2 class="card-title">Produtos</h2><p class="card-subtitle">Itens controlados pelo sistema com respectiva unidade base.</p></div><a class="btn" href="/catalog/products/new/">Novo produto</a></div>
-{% if products %}<div class="table-wrap"><table><tr><th>Produto</th><th>Categoria</th><th>Unidade base</th><th>Declaração padrão</th><th>Ativo</th><th></th></tr>{% for product in products %}<tr><td><strong>{{ product.name }}</strong></td><td>{{ product.category|default:'-' }}</td><td>{{ product.get_unit_display }}</td><td>{{ product.default_claim|default:'-' }}</td><td>{% if product.active %}<span class="badge success">Ativo</span>{% else %}<span class="badge danger">Inativo</span>{% endif %}</td><td><a class="inline-link" href="/catalog/products/{{ product.id }}/edit/">Editar</a></td></tr>{% empty %}<tr><td colspan="6" class="muted">Sem produtos cadastrados.</td></tr>{% endfor %}</table></div>{% else %}<div class="empty-state">Nenhum produto cadastrado.</div>{% endif %}
-</div>
-{% endblock %}
