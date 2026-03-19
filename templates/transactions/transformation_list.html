@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="listing-head">
+    <div>
+      <div class="kicker">Processo</div>
+      <h2 class="card-title">Transformações</h2>
+      <p class="card-subtitle">Consumo de produto origem com geração automática do produto destino.</p>
+    </div>
+    {% if user.is_participant_user %}<a class="btn" href="/transactions/transformations/new/">Nova transformação</a>{% endif %}
+  </div>
+  {% if records %}
+  <div class="table-wrap"><table>
+    <tr><th>Data</th><th>Origem</th><th>Destino</th><th>Rendimento</th><th>Status</th></tr>
+    {% for r in records %}
+    <tr>
+      <td>{{ r.movement_date|date:"d/m/Y" }}</td>
+      <td><strong>{{ r.source_product }}</strong><br>{{ r.source_quantity }} {{ r.source_unit }}<br><span class="muted">{{ r.source_quantity_base }} {{ r.source_product.get_unit_display }}</span></td>
+      <td><strong>{{ r.target_product }}</strong><br>{{ r.target_quantity_base }} {{ r.target_product.get_unit_display }}</td>
+      <td>{{ r.yield_factor_snapshot }}</td>
+      <td><span class="badge {% if r.status == 'reviewed' %}success{% elif r.status == 'needs_correction' %}warning{% else %}neutral{% endif %}">{{ r.get_status_display }}</span></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">Nenhuma transformação registrada ainda.</div>{% endif %}
+</div>
+{% endblock %}
