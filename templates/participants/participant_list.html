@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card"><div class="listing-head"><div><div class="kicker">Cadastro</div><h2 class="card-title">Participantes</h2><p class="card-subtitle">Empresas que compõem o grupo e operam no portal.</p></div><a class="btn" href="/participants/new/">Novo participante</a></div>
+{% if participants %}<div class="table-wrap"><table><tr><th>Nome</th><th>CNPJ</th><th>Status</th><th>Responsável</th><th>E-mail</th><th></th></tr>{% for p in participants %}<tr><td><strong>{{ p }}</strong></td><td>{{ p.cnpj }}</td><td><span class="badge {% if p.status == 'active' %}success{% elif p.status == 'suspended' %}danger{% else %}neutral{% endif %}">{{ p.get_status_display }}</span></td><td>{{ p.contact_name|default:'-' }}</td><td>{{ p.contact_email|default:'-' }}</td><td><a class="inline-link" href="/participants/{{ p.id }}/edit/">Editar</a></td></tr>{% endfor %}</table></div>{% else %}<div class="empty-state">Nenhum participante cadastrado.</div>{% endif %}
+</div>
+{% endblock %}

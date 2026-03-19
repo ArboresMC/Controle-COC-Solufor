@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block hero_title %}Painel operacional Solufor{% endblock %}
+{% block hero_text %}Acompanhe saldos, movimentações do mês, pendências e indicadores essenciais para o controle operacional do grupo certificado.{% endblock %}
+{% block content %}
+{% if dashboard_alerts %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Alertas automáticos</div>
+      <h2 class="card-title">Pontos que exigem atenção</h2>
+      <p class="card-subtitle">Os alertas abaixo ajudam a priorizar correções, fechamentos e riscos operacionais.</p>
+    </div>
+  </div>
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+    {% for alert in dashboard_alerts %}
+    <div class="card soft">
+      <span class="badge {% if alert.level == 'danger' %}danger{% elif alert.level == 'warning' %}warning{% else %}neutral{% endif %}">{{ alert.level|title }}</span>
+      <h3 style="margin-top:12px;">{{ alert.title }}</h3>
+      <p class="muted">{{ alert.description }}</p>
+      {% if alert.url %}<a class="inline-link" href="{{ alert.url }}">Abrir</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="grid metrics">
+  <div class="card metric-card"><div class="metric-label">Entradas no mês</div><div class="metric-value">{{ entries_count }}</div><div class="metric-foot">Total convertido: {{ entries_total }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Saídas no mês</div><div class="metric-value">{{ sales_count }}</div><div class="metric-foot">Total convertido: {{ sales_total }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Transformações</div><div class="metric-value">{{ transformations_count }}</div><div class="metric-foot">Registros de conversão entre produtos</div></div>
+  <div class="card metric-card"><div class="metric-label">Pendências</div><div class="metric-value">{{ needs_correction }}</div><div class="metric-foot">Registros aguardando correção ou revisão</div></div>
+</div>
+
+{% if user.is_manager %}
+<div class="grid metrics">
+  <div class="card metric-card"><div class="metric-label">Participantes ativos</div><div class="metric-value">{{ manager_metrics.participants_active }}</div><div class="metric-foot">Cadastros operacionais ativos</div></div>
+  <div class="card metric-card"><div class="metric-label">Sem fechamento no mês</div><div class="metric-value">{{ manager_metrics.participants_without_closing }}</div><div class="metric-foot">Participantes ainda sem envio</div></div>
+  <div class="card metric-card"><div class="metric-label">Fechamentos enviados</div><div class="metric-value">{{ manager_metrics.closings_submitted }}</div><div class="metric-foot">Competência atual</div></div>
+  <div class="card metric-card"><div class="metric-label">Participantes com saldo baixo</div><div class="metric-value">{{ manager_metrics.low_balance_participants }}</div><div class="metric-foot">Itens em nível de atenção</div></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Painel gerencial</h2>
+      <p class="card-subtitle">Visão resumida de acompanhamento por participante.</p>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/reports/consolidated.xlsx">Baixar relatório FSC</a>
+      <a class="btn secondary" href="/reports/traceability/">Ver rastreabilidade</a>
+    </div>
+  </div>
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Participante</th><th>Saldos monitorados</th><th>Saldos baixos</th><th>Ação</th></tr>
+      {% for item in participant_summaries %}
+      <tr>
+        <td><strong>{{ item.participant }}</strong></td>
+        <td>{{ item.balance_count }}</td>
+        <td>{% if item.low_count %}<span class="badge warning">{{ item.low_count }} em alerta</span>{% else %}<span class="badge success">Sem alerta</span>{% endif %}</td>
+        <td><a class="inline-link" href="/reports/traceability/?participant={{ item.participant.id }}">Abrir rastreabilidade</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="muted">Nenhum participante consolidado ainda.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Saldos disponíveis</h2>
+        <p class="card-subtitle">Saldo validado pronto para uso e conferência.</p>
+      </div>
+    </div>
+    {% if balance_items %}
+    <div class="table-wrap compact-table">
+      <table>
+        <tr><th>Produto</th><th>Situação</th></tr>
+        {% for item in balance_items %}
+        <tr>
+          <td><strong>{{ item.product }}</strong></td>
+          <td><span class="balance {{ item.status_class }}">{{ item.balance }} {{ item.unit }}</span></td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+      <div class="empty-state">Nenhum saldo validado ainda.</div>
+    {% endif %}
+  </div>
+
+  <div class="card soft">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Saldos projetados</h2>
+        <p class="card-subtitle">Considera todos os lançamentos e transformações registrados.</p>
+      </div>
+    </div>
+    {% if projected_balance_items %}
+      <div class="stack">
+      {% for item in projected_balance_items %}
+        <div class="info-box">
+          <strong>{{ item.product }}</strong><br>
+          <span class="balance {{ item.status_class }}" style="margin-top:8px;">{{ item.balance }} {{ item.unit }}</span>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">Nenhum saldo projetado encontrado.</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Entradas recentes</h2>
+        <p class="card-subtitle">Últimos lançamentos de compras e recebimentos.</p>
+      </div>
+      {% if user.is_participant_user %}<a class="btn" href="/transactions/entries/new/">Nova entrada</a>{% endif %}
+    </div>
+    {% if recent_entries %}
+    <div class="table-wrap compact-table"><table><tr><th>Data</th><th>Documento</th><th>Produto</th><th>Quantidade</th></tr>{% for item in recent_entries %}<tr><td>{{ item.movement_date|date:"d/m/Y" }}</td><td>{{ item.document_number }}</td><td><strong>{{ item.product }}</strong></td><td>{{ item.quantity }} {{ item.movement_unit }}<br><span class="muted">{{ item.quantity_base }} {{ item.get_unit_snapshot_display }}</span></td></tr>{% endfor %}</table></div>
+    {% else %}<div class="empty-state">Sem entradas recentes.</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Saídas recentes</h2>
+        <p class="card-subtitle">Últimos registros de venda e expedição.</p>
+      </div>
+      {% if user.is_participant_user %}<a class="btn" href="/transactions/sales/new/">Nova saída</a>{% endif %}
+    </div>
+    {% if recent_sales %}
+    <div class="table-wrap compact-table"><table><tr><th>Data</th><th>Documento</th><th>Produto</th><th>Quantidade</th></tr>{% for item in recent_sales %}<tr><td>{{ item.movement_date|date:"d/m/Y" }}</td><td>{{ item.document_number }}</td><td><strong>{{ item.product }}</strong></td><td>{{ item.quantity }} {{ item.movement_unit }}<br><span class="muted">{{ item.quantity_base }} {{ item.get_unit_snapshot_display }}</span></td></tr>{% endfor %}</table></div>
+    {% else %}<div class="empty-state">Sem saídas recentes.</div>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Transformações recentes</h2>
+      <p class="card-subtitle">Conversões entre produtos com rendimento aplicado.</p>
+    </div>
+    {% if user.is_participant_user %}<a class="btn" href="/transactions/transformations/new/">Nova transformação</a>{% endif %}
+  </div>
+  {% if recent_transformations %}
+  <div class="table-wrap"><table>
+    <tr><th>Data</th><th>Origem</th><th>Destino</th><th>Rendimento</th></tr>
+    {% for item in recent_transformations %}
+    <tr>
+      <td>{{ item.movement_date|date:"d/m/Y" }}</td>
+      <td><strong>{{ item.source_product }}</strong><br>{{ item.source_quantity }} {{ item.source_unit }}<br><span class="muted">{{ item.source_quantity_base }} {{ item.source_product.get_unit_display }}</span></td>
+      <td><strong>{{ item.target_product }}</strong><br>{{ item.target_quantity_base }} {{ item.target_product.get_unit_display }}</td>
+      <td><span class="badge neutral">{{ item.yield_factor_snapshot }}</span></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">Sem transformações recentes.</div>{% endif %}
+</div>
+{% endblock %}

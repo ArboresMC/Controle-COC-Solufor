@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="split"><div class="card"><div class="card-header"><div><div class="kicker">Regra de unidade</div><h2 class="card-title">{% if form.instance.pk %}Editar conversão{% else %}Nova conversão{% endif %}</h2><p class="card-subtitle">Exemplo: para converter tonelada em m³, informe origem = t, destino = m³ e o fator correspondente.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar conversão</button><a class="btn secondary" href="/catalog/conversions/">Cancelar</a></div></form></div><div class="card soft"><div class="info-box"><strong>Auditoria</strong><br><span class="muted">Mantenha apenas regras válidas e coerentes com a base técnica utilizada pelo grupo.</span></div></div></div>
+{% endblock %}
