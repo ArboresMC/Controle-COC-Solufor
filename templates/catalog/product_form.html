@@ -1,4 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card" style="max-width: 860px;"><div class="card-header"><div><div class="kicker">Cadastro mestre</div><h2 class="card-title">{% if form.instance.pk %}Editar produto{% else %}Novo produto{% endif %}</h2><p class="card-subtitle">Defina a unidade base e os dados principais do produto rastreado.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar produto</button><a class="btn secondary" href="/catalog/products/">Cancelar</a></div></form></div>
-{% endblock %}
