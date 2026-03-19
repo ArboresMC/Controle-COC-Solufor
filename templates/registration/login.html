@@ -1,0 +1,35 @@
+{% load static %}
+{% extends "base.html" %}
+
+{% block content %}
+<section class="login-shell">
+  <div class="login-hero">
+    <img class="login-logo" src="{% static 'img/solufor-logo.png' %}" alt="Solufor Soluções Florestais">
+    <div class="kicker">Acesso seguro</div>
+    <h1>Solufor Soluções Florestais</h1>
+    <p>Entre no ambiente operacional da Solufor para registrar compras, vendas, transformações, importações por planilha e acompanhar o saldo elegível do grupo certificado em tempo real.</p>
+    <ul>
+      <li>Controle por participante do grupo certificado</li>
+      <li>Conversão automática de unidades e rendimentos</li>
+      <li>Rastreabilidade entre entrada, transformação e saída</li>
+      <li>Fechamento mensal e relatórios prontos para auditoria</li>
+    </ul>
+  </div>
+  <div class="card login-card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Login</div>
+        <h2 class="card-title">Acessar sistema</h2>
+        <p class="card-subtitle">Use seu usuário e senha para entrar no portal operacional da Solufor.</p>
+      </div>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions">
+        <button type="submit" class="btn">Entrar</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

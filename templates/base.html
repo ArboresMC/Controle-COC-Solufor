@@ -1,0 +1,99 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solufor Soluções Florestais</title>
+  <link rel="icon" type="image/png" href="{% static 'img/solufor-logo.png' %}">
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
+        <img class="brand-logo" src="{% static 'img/solufor-logo.png' %}" alt="Solufor Soluções Florestais">
+        <span class="brand-copy">
+          <strong>Solufor Soluções Florestais</strong>
+          <span>Controle operacional de cadeia de custódia, conversões, rastreabilidade e saldo elegível</span>
+        </span>
+      </a>
+      {% if user.is_authenticated %}
+      <div class="userbox">
+        <strong>{{ user.username }}</strong>
+        <span>
+          {% if user.is_manager %}Gestão do grupo certificado{% elif user.is_auditor %}Consulta e auditoria{% else %}Operação do participante{% endif %}
+          · <a href="/logout/">Sair</a>
+        </span>
+      </div>
+      {% else %}
+      <div class="userbox">
+        <strong>Acesso ao sistema</strong>
+        <span><a href="/login/">Entrar</a></span>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="page">
+    {% if user.is_authenticated %}
+    <section class="hero">
+      <div>
+        <div class="kicker">Ambiente operacional Solufor</div>
+        <h1>{% block hero_title %}Solufor Soluções Florestais{% endblock %}</h1>
+        <p>{% block hero_text %}Ambiente de controle operacional para grupo certificado, com gestão de entradas, saídas, transformações, saldos, importação e rastreabilidade.{% endblock %}</p>
+        <div class="nav-pills">
+          <a class="nav-pill" href="/">Dashboard</a>
+
+          {% if user.is_participant_user %}
+            <a class="nav-pill" href="/transactions/entries/">Entradas</a>
+            <a class="nav-pill" href="/transactions/sales/">Saídas</a>
+            <a class="nav-pill" href="/transactions/transformations/">Transformações</a>
+            <a class="nav-pill" href="/compliance/">Fechamentos</a>
+            <a class="nav-pill" href="/reports/import/">Importar planilha</a>
+          {% elif user.is_auditor %}
+            <a class="nav-pill" href="/reports/traceability/">Rastreabilidade</a>
+            <a class="nav-pill" href="/reports/consolidated.xlsx">Relatório FSC</a>
+          {% elif user.is_manager %}
+            <a class="nav-pill" href="/participants/">Participantes</a>
+            <a class="nav-pill" href="/catalog/products/">Produtos</a>
+            <a class="nav-pill" href="/catalog/conversions/">Conversões</a>
+            <a class="nav-pill" href="/catalog/transformation-rules/">Rendimentos</a>
+            <a class="nav-pill" href="/catalog/counterparties/">Cadastros</a>
+            <a class="nav-pill" href="/users/">Usuários</a>
+            <a class="nav-pill" href="/transactions/manager/review/entries/">Revisão</a>
+            <a class="nav-pill" href="/reports/traceability/">Rastreabilidade</a>
+            <a class="nav-pill" href="/reports/consolidated.xlsx">Relatório FSC</a>
+            <a class="nav-pill" href="/admin/">Admin</a>
+          {% endif %}
+        </div>
+      </div>
+      <div class="stack">
+        {% block hero_side %}
+        <span class="badge neutral">{% now "d/m/Y H:i" %}</span>
+        {% if user.is_manager %}
+          <span class="badge success">Gestão consolidada ativa</span>
+        {% elif user.is_auditor %}
+          <span class="badge warning">Ambiente de consulta</span>
+        {% else %}
+          <span class="badge success">Lançamentos operacionais liberados</span>
+        {% endif %}
+        {% endblock %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if messages %}
+      <ul class="messages">
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>
