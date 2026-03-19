@@ -17,13 +17,40 @@ def seed_fsc_claims(apps, schema_editor):
     EntryRecord = apps.get_model('transactions', 'EntryRecord')
     SaleRecord = apps.get_model('transactions', 'SaleRecord')
 
-    seen_codes = set()
+    seen_codes = set(FSCClaim.objects.values_list('code', flat=True))
+
     for name, code, sort_order in DEFAULT_CLAIMS:
-        FSCClaim.objects.get_or_create(
-            code=code,
-            defaults={'name': name, 'active': True, 'sort_order': sort_order},
-        )
-        seen_codes.add(code)
+        obj = FSCClaim.objects.filter(name=name).first()
+        if obj:
+            changed = False
+            if not obj.code:
+                obj.code = code
+                changed = True
+            if obj.sort_order != sort_order:
+                obj.sort_order = sort_order
+                changed = True
+            if not obj.active:
+                obj.active = True
+                changed = True
+            if changed:
+                obj.save(update_fields=['code', 'sort_order', 'active'])
+            seen_codes.add(obj.code)
+        else:
+            final_code = code
+            base_code = code
+            index = 1
+            while FSCClaim.objects.filter(code=final_code).exists():
+                suffix = f'-{index}'
+                final_code = f'{base_code[:50-len(suffix)]}{suffix}'
+                index += 1
+
+            FSCClaim.objects.create(
+                name=name,
+                code=final_code,
+                active=True,
+                sort_order=sort_order,
+            )
+            seen_codes.add(final_code)
 
     names = set(
         value.strip()
@@ -38,18 +65,24 @@ def seed_fsc_claims(apps, schema_editor):
 
     sort_order = 100
     for name in sorted(names):
+        existing = FSCClaim.objects.filter(name=name).first()
+        if existing:
+            continue
+
         code = slugify(name)[:50] or f'claim-{sort_order}'
         base_code = code
         index = 1
-        while code in seen_codes or FSCClaim.objects.filter(code=code).exists():
+        while FSCClaim.objects.filter(code=code).exists():
             suffix = f'-{index}'
             code = f'{base_code[:50-len(suffix)]}{suffix}'
             index += 1
-        FSCClaim.objects.get_or_create(
+
+        FSCClaim.objects.create(
+            name=name,
             code=code,
-            defaults={'name': name, 'active': True, 'sort_order': sort_order},
+            active=True,
+            sort_order=sort_order,
         )
-        seen_codes.add(code)
         sort_order += 10
 
 
