@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card"><div class="listing-head"><div><div class="kicker">Regras</div><h2 class="card-title">Conversões de unidade</h2><p class="card-subtitle">Fatores aplicados para converter a unidade informada na entrada ou saída para a unidade base do produto.</p></div><a class="btn" href="/catalog/conversions/new/">Nova conversão</a></div>
+{% if conversions %}<div class="table-wrap"><table><tr><th>Produto</th><th>Origem</th><th>Destino</th><th>Fator</th><th>Ativo</th><th></th></tr>{% for item in conversions %}<tr><td><strong>{{ item.product }}</strong></td><td>{{ item.get_from_unit_display }}</td><td>{{ item.get_to_unit_display }}</td><td>{{ item.factor }}</td><td>{% if item.active %}<span class="badge success">Ativo</span>{% else %}<span class="badge danger">Inativo</span>{% endif %}</td><td><a class="inline-link" href="/catalog/conversions/{{ item.id }}/edit/">Editar</a></td></tr>{% empty %}<tr><td colspan="6" class="muted">Sem conversões cadastradas.</td></tr>{% endfor %}</table></div>{% else %}<div class="empty-state">Nenhuma conversão cadastrada.</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card"><div class="listing-head"><div><div class="kicker">Regras</div><h2 class="card-title">Regras de rendimento</h2><p class="card-subtitle">Definem quanto do produto destino é gerado a partir do produto origem.</p></div><a class="btn" href="/catalog/transformation-rules/new/">Nova regra</a></div>
+{% if rules %}<div class="table-wrap"><table><tr><th>Produto origem</th><th>Produto destino</th><th>Fator</th><th>Ativo</th><th></th></tr>{% for item in rules %}<tr><td><strong>{{ item.source_product }}</strong></td><td><strong>{{ item.target_product }}</strong></td><td>{{ item.yield_factor }}</td><td>{% if item.active %}<span class="badge success">Ativo</span>{% else %}<span class="badge danger">Inativo</span>{% endif %}</td><td><a class="inline-link" href="/catalog/transformation-rules/{{ item.id }}/edit/">Editar</a></td></tr>{% empty %}<tr><td colspan="5" class="muted">Sem regras cadastradas.</td></tr>{% endfor %}</table></div>{% else %}<div class="empty-state">Nenhuma regra de rendimento cadastrada.</div>{% endif %}
+</div>
+{% endblock %}
