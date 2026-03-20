@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="split">
+  <div class="card">
+    <div class="card-header"><div><div class="kicker">Envio</div><h2 class="card-title">Fechar competência</h2><p class="card-subtitle">Confirme o envio do período após revisar entradas, saídas e transformações do mês.</p></div></div>
+    <div class="info-box" style="margin-bottom:16px;"><strong>Competência:</strong> {{ closing.month }}/{{ closing.year }}<br><strong>Status atual:</strong> {{ closing.get_status_display }}</div>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions"><button class="btn" type="submit">Enviar fechamento</button><a class="btn secondary" href="/compliance/">Cancelar</a></div>
+    </form>
+  </div>
+  <div class="card soft"><div class="info-box"><strong>Recomendação</strong><br><span class="muted">Antes de enviar, revise se todas as movimentações da competência estão lançadas e se os anexos necessários já foram vinculados.</span></div></div>
+</div>
+{% endblock %}

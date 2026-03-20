@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="split"><div class="card"><div class="card-header"><div><div class="kicker">Regra de rendimento</div><h2 class="card-title">{% if form.instance.pk %}Editar regra{% else %}Nova regra de rendimento{% endif %}</h2><p class="card-subtitle">Exemplo: 1,000 m³ de tora gera 0,500 m³ de madeira serrada. Nesse caso o fator é 0,500.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar regra</button><a class="btn secondary" href="/catalog/transformation-rules/">Cancelar</a></div></form></div><div class="card soft"><div class="info-box"><strong>Controle técnico</strong><br><span class="muted">Essa regra será usada para calcular a quantidade gerada nas transformações e validar saldos técnicos. Regras específicas da empresa têm prioridade sobre regras gerais.</span></div></div></div>
+{% endblock %}
