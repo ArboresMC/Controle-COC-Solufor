@@ -1,4 +1,3 @@
-{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -59,24 +58,7 @@ a:hover { text-decoration: underline; }
 }
 .sidebar-brand { display:flex; align-items:flex-start; gap:12px; min-width:0; color:white; text-decoration:none; flex:1; overflow:hidden; }
 .sidebar-brand:hover { text-decoration:none; }
-.brand-logo { display: none; }
-
-.sidebar-footer-logo {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255,255,255,.08);
-  display: flex;
-  justify-content: center;
-}
-
-.sidebar-footer-logo img {
-  width: 110px;
-  max-width: 100%;
-  height: auto;
-  display: block;
-  object-fit: contain;
-  opacity: .92;
-}
+.brand-logo { width: 86px; max-width: 86px; height: auto; display: block; object-fit: contain; flex: 0 0 86px; }
 .sidebar-toggle {
   width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12);
   background: rgba(255,255,255,.08); color: white; cursor: pointer; font-size: 18px; font-weight: 700;
@@ -212,12 +194,43 @@ input[type='checkbox'] { width: auto; }
 .listing-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
 .split { display:grid; grid-template-columns: 1.2fr .8fr; gap:18px; }
 .info-box { background: #f8fbf9; border:1px solid var(--line); border-radius: 16px; padding: 16px; }
-.login-shell { max-width: 980px; margin: 36px auto 0; display:grid; grid-template-columns: 1.15fr .85fr; gap: 18px; }
+.login-shell {
+  max-width: 1180px;
+  margin: 36px auto 0;
+  display:grid;
+  grid-template-columns: 1.42fr .58fr;
+  gap: 20px;
+  align-items: stretch;
+}
 .login-hero {
-  background: linear-gradient(135deg, #14532d 0%, #1c7c44 100%); color: white; border-radius: 24px; padding: 34px; box-shadow: var(--shadow);
+  background: linear-gradient(135deg, #14532d 0%, #1c7c44 100%);
+  color: white;
+  border-radius: 24px;
+  padding: 34px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.login-hero img {
+  display: block !important;
+  width: 100% !important;
+  max-width: 260px !important;
+  height: auto !important;
+  margin: 0 auto 24px auto !important;
+  object-fit: contain !important;
 }
 .login-hero ul { padding-left: 18px; color: rgba(255,255,255,.88); }
-.login-card { max-width: none; margin: 0; }
+.login-card {
+  max-width: none;
+  margin: 0;
+  min-width: 0;
+  padding: 28px 22px;
+}
+.login-card input,
+.login-card button,
+.login-card .btn {
+  width: 100%;
+  min-height: 44px;
+}
 .compact-table table { min-width: 100%; }
 .brand-copy { min-width: 0; flex: 1; }
 .brand-copy strong { display:block; font-size: 14px; line-height: 1.25; }
@@ -254,6 +267,7 @@ input[type='checkbox'] { width: auto; }
   .topbar-inner, .page { padding-left: 16px; padding-right: 16px; }
   .hero { padding: 22px; }
   .brand-logo { width: 72px; max-width: 72px; flex-basis: 72px; }
+  .login-hero img { max-width: 180px !important; }
 }
   </style>
 </head>
@@ -329,12 +343,7 @@ input[type='checkbox'] { width: auto; }
         </div>
       </div>
     </div>
-  
-<div class="sidebar-footer-logo">
-  <img src="{% static 'img/logo.png' %}" alt="Solufor">
-</div>
-
-</aside>
+  </aside>
   <div id="mobileOverlay" class="mobile-overlay"></div>
   {% endif %}
 
