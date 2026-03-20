@@ -158,12 +158,68 @@ input[type='checkbox'] { width: auto; }
 }
 
 
-.brand-logo { width: 210px; max-width: 42vw; height: auto; display: block; }
-.login-logo { width: 100%; max-width: 520px; height: auto; display:block; margin: 0 auto; filter: brightness(0) invert(1); opacity: .96; object-fit: contain; }
-.brand-copy strong { font-size: 16px; }
-.brand-copy span { max-width: 520px; display:block; }
+.brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.brand-logo {
+  width: 84px;
+  max-width: 84px;
+  height: auto;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  margin-top: 2px;
+}
+
+.brand-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.brand-copy strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.25;
+  margin-bottom: 6px;
+}
+
+.brand-copy span {
+  display: block;
+  max-width: 170px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.login-logo {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  filter: brightness(0) invert(1);
+  opacity: .96;
+  object-fit: contain;
+}
+
 @media (max-width: 900px) {
-  .brand { align-items: flex-start; }
-  .brand-logo { width: 150px; }
-  .login-logo { width: 220px; }
+  .brand {
+    align-items: flex-start;
+  }
+
+  .brand-logo {
+    width: 64px;
+    max-width: 64px;
+  }
+
+  .brand-copy span {
+    max-width: 150px;
+  }
+
+  .login-logo {
+    width: 220px;
+  }
+}
 }
