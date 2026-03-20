@@ -1,128 +1,120 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Solufor{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solufor Soluções Florestais</title>
 
-    <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+  <style>
+:root {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-soft: #f8fafc;
 
-    <style>
-    :root {
-        --bg: #f5f7fb;
-        --panel: #ffffff;
-        --panel-soft: #f8fafc;
+  --text: #0f172a;
+  --muted: #64748b;
+  --line: #dbe2ea;
 
-        --text: #0f172a;
-        --muted: #64748b;
-        --line: #dbe2ea;
+  --primary: #111827;
+  --primary-2: #000000;
+  --primary-soft: #e5e7eb;
 
-        --primary: #111827;
-        --primary-2: #0b1220;
-        --primary-soft: #e5e7eb;
+  --premium-gold: #c9a227;
+  --premium-dark: #0b1220;
 
-        --premium-gold: #c9a227;
-        --premium-dark: #0b1220;
+  --warning: #b45309;
+  --warning-soft: #fff3d9;
+  --danger: #b42318;
+  --danger-soft: #feeceb;
+  --success: #0f766e;
+  --success-soft: #e7f7f5;
 
-        --warning: #b45309;
-        --warning-soft: #fff3d9;
-        --danger: #b42318;
-        --danger-soft: #feeceb;
-        --success: #0f766e;
-        --success-soft: #e7f7f5;
-    }
+  --shadow: 0 14px 36px rgba(15, 23, 42, 0.10);
+  --radius: 18px;
+}
 
-    body {
-        background: linear-gradient(180deg, #e8ecf3 0%, var(--bg) 220px);
-        color: var(--text);
-        margin: 0;
-        font-family: Inter, sans-serif;
-    }
+body {
+  font-family: Inter, sans-serif;
+  background: linear-gradient(180deg, #e8ecf3 0%, var(--bg) 220px);
+  color: var(--text);
+  margin: 0;
+}
 
-    .topbar {
-        background: rgba(11, 18, 32, 0.92);
-        color: white;
-        padding: 16px 24px;
-    }
+.topbar {
+  background: rgba(11, 18, 32, 0.92);
+  color: white;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
 
-    .brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
+.brand-badge {
+  background: linear-gradient(135deg, var(--premium-gold), #8a6a14);
+}
 
-    .brand-badge {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
-        display: grid;
-        place-items: center;
-        font-weight: bold;
-        background: linear-gradient(135deg, var(--premium-gold), #8a6a14);
-        color: black;
-    }
+.hero {
+  background: linear-gradient(135deg, var(--premium-dark), #1f2937, #334155);
+  color: white;
+}
 
-    .hero {
-        background: linear-gradient(135deg, var(--premium-dark), #1f2937, #334155);
-        color: white;
-        padding: 28px;
-        border-radius: 20px;
-        margin-bottom: 20px;
-    }
+.card {
+  border: 1px solid rgba(15, 23, 42, .08);
+}
 
-    .card {
-        background: var(--panel);
-        border-radius: 16px;
-        padding: 20px;
-        border: 1px solid var(--line);
-        margin-bottom: 16px;
-    }
+.metric-card::after {
+  background: rgba(201,162,39,.10);
+}
 
-    .btn {
-        background: var(--primary);
-        color: white;
-        padding: 10px 16px;
-        border-radius: 10px;
-        text-decoration: none;
-        font-weight: 600;
-    }
+.btn {
+  background: var(--primary);
+  box-shadow: 0 10px 24px rgba(15,23,42,.18);
+}
 
-    .btn:hover {
-        opacity: 0.9;
-    }
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid rgba(201,162,39,.18);
+  border-color: var(--premium-gold);
+}
 
-    .nav-pill {
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.1);
-        padding: 8px 14px;
-        border-radius: 999px;
-        color: white;
-        text-decoration: none;
-    }
+.nav-pill {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.10);
+}
 
-    .nav-pill:hover {
-        background: rgba(255,255,255,0.15);
-    }
-    </style>
+.nav-pill:hover {
+  background: rgba(255,255,255,.14);
+}
 
-    {% block extra_head %}{% endblock %}
+.login-hero {
+  background: linear-gradient(135deg, var(--premium-dark), #1e293b, #334155);
+}
+  </style>
 </head>
 
 <body>
+<div class="app-shell">
 
-<header class="topbar">
-    <div class="brand">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
         <div class="brand-badge">S</div>
-        <div>
-            <strong>Solufor Soluções Florestais</strong><br>
-            <small>Controle operacional FSC</small>
+        <div class="brand-copy">
+          <strong>Solufor</strong>
+          <span>Controle FSC</span>
         </div>
+      </a>
+
+      {% if user.is_authenticated %}
+      <div class="userbox">
+        <strong>{{ user.username }}</strong>
+        <span>{{ user.get_role_display }}</span>
+      </div>
+      {% endif %}
     </div>
-</header>
+  </header>
 
-<main style="padding: 24px;">
+  <main class="page">
     {% block content %}{% endblock %}
-</main>
+  </main>
 
+</div>
 </body>
 </html>
