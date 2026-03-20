@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width: 860px;"><div class="card-header"><div><div class="kicker">Cadastro</div><h2 class="card-title">{% if form.instance.pk %}Editar participante{% else %}Novo participante{% endif %}</h2><p class="card-subtitle">Cadastre os dados principais da empresa e o responsável operacional.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar participante</button><a class="btn secondary" href="/participants/">Cancelar</a></div></form></div>
+{% endblock %}
