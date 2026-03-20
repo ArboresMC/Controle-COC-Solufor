@@ -1,4 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card" style="max-width: 860px;"><div class="card-header"><div><div class="kicker">Cadastros auxiliares</div><h2 class="card-title">{% if form.instance.pk %}Editar cadastro{% else %}Novo cliente ou fornecedor{% endif %}</h2><p class="card-subtitle">Use esse cadastro para documentos de compra, venda e movimentações rastreáveis.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar cadastro</button><a class="btn secondary" href="/catalog/counterparties/">Cancelar</a></div></form></div>
-{% endblock %}
