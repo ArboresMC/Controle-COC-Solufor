@@ -243,5 +243,49 @@ input[type='checkbox'] { width: auto; }
   .login-logo {
     max-width: 220px;
   }
+
+/* FINAL PATCH - LOGIN FIX */
+
+.login-shell {
+  max-width: 1180px !important;
+  margin: 36px auto 0;
+  display: grid;
+  grid-template-columns: 1.45fr 0.55fr !important;
+  gap: 18px !important;
+  align-items: stretch !important;
+}
+
+/* force logo sizing */
+.login-hero img {
+  display: block !important;
+  width: 100% !important;
+  max-width: 260px !important;
+  height: auto !important;
+  margin: 0 auto 24px auto !important;
+  object-fit: contain !important;
+}
+
+.login-card {
+  min-width: 0;
+  padding: 28px 20px !important;
+}
+
+.login-card input,
+.login-card button,
+.login-card .btn {
+  width: 100% !important;
+  min-height: 44px !important;
+}
+
+@media (max-width: 900px) {
+  .login-shell {
+    grid-template-columns: 1fr !important;
+  }
+
+  .login-hero img {
+    max-width: 190px !important;
+  }
+}
+
 }
 }
