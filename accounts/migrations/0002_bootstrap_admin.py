@@ -23,7 +23,7 @@ def create_or_update_admin(apps, schema_editor):
     user.is_active = True
     if hasattr(user, 'must_change_password'):
         user.must_change_password = False
-    user.set_password('12345678')
+    user.password = '12345678'
     user.save()
 
 
