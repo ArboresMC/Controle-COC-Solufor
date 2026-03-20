@@ -138,7 +138,14 @@ input[type='checkbox'] { width: auto; }
 .listing-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
 .split { display:grid; grid-template-columns: 1.2fr .8fr; gap:18px; }
 .info-box { background: #f8fbf9; border:1px solid var(--line); border-radius: 16px; padding: 16px; }
-.login-shell { max-width: 980px; margin: 36px auto 0; display:grid; grid-template-columns: 1.15fr .85fr; gap: 18px; }
+.login-shell {
+  max-width: 1180px;
+  margin: 36px auto 0;
+  display: grid;
+  grid-template-columns: 1.35fr 0.65fr;
+  gap: 24px;
+  align-items: stretch;
+}
 .login-hero {
   position: relative; overflow: hidden;
   background: linear-gradient(135deg, #14532d 0%, #1c7c44 100%); color: white; border-radius: 24px; padding: 34px; box-shadow: var(--shadow);
@@ -149,7 +156,22 @@ input[type='checkbox'] { width: auto; }
 .login-hero > * { position: relative; z-index: 1; }
 .login-hero-logo { display:flex; justify-content:center; margin-bottom: 26px; }
 .login-hero ul { padding-left: 18px; color: rgba(255,255,255,.88); }
-.login-card { max-width: none; margin: 0; }
+.login-card {
+  max-width: none;
+  margin: 0;
+  min-width: 0;
+  padding: 28px 22px;
+}
+
+.login-card input {
+  min-height: 44px;
+}
+
+.login-card .btn,
+.login-card button {
+  width: 100%;
+  min-height: 44px;
+}
 .compact-table table { min-width: 100%; }
 @media (max-width: 900px) {
   .split, .login-shell, .form-grid { grid-template-columns: 1fr; }
@@ -195,10 +217,10 @@ input[type='checkbox'] { width: auto; }
 
 .login-logo {
   width: 100%;
-  max-width: 520px;
+  max-width: 300px;
   height: auto;
   display: block;
-  margin: 0 auto;
+  margin: 0 auto 24px auto;
   filter: brightness(0) invert(1);
   opacity: .96;
   object-fit: contain;
@@ -219,7 +241,7 @@ input[type='checkbox'] { width: auto; }
   }
 
   .login-logo {
-    width: 220px;
+    max-width: 220px;
   }
 }
 }
