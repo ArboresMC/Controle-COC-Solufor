@@ -58,7 +58,24 @@ a:hover { text-decoration: underline; }
 }
 .sidebar-brand { display:flex; align-items:flex-start; gap:12px; min-width:0; color:white; text-decoration:none; flex:1; overflow:hidden; }
 .sidebar-brand:hover { text-decoration:none; }
-.brand-logo { width: 86px; max-width: 86px; height: auto; display: block; object-fit: contain; flex: 0 0 86px; }
+.brand-logo { display: none; }
+
+.sidebar-footer-logo {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-footer-logo img {
+  width: 110px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  opacity: .92;
+}
 .sidebar-toggle {
   width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12);
   background: rgba(255,255,255,.08); color: white; cursor: pointer; font-size: 18px; font-weight: 700;
@@ -311,7 +328,12 @@ input[type='checkbox'] { width: auto; }
         </div>
       </div>
     </div>
-  </aside>
+  
+<div class="sidebar-footer-logo">
+  <img src="{% static 'img/logo.png' %}" alt="Solufor">
+</div>
+
+</aside>
   <div id="mobileOverlay" class="mobile-overlay"></div>
   {% endif %}
 
