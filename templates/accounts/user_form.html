@@ -1,4 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card" style="max-width: 860px;"><div class="card-header"><div><div class="kicker">Acesso</div><h2 class="card-title">{% if form.instance.pk %}Editar usuário{% else %}Novo usuário{% endif %}</h2><p class="card-subtitle">Defina o perfil de acesso e o participante associado quando aplicável.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar usuário</button><a class="btn secondary" href="/users/">Cancelar</a></div></form></div>
-{% endblock %}
