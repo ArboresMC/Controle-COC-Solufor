@@ -1,8 +1,15 @@
-
 from django import forms
 from catalog.models import Counterparty, Product, FSCClaim
 from .models import EntryRecord, SaleRecord, TransformationRecord, TraceLot
-from .services import calculate_target_from_source, convert_to_base, get_lot_remaining_for_sale, get_manual_sale_lot_choices
+from .services import (
+    convert_to_base,
+    get_lot_remaining_for_sale,
+    get_lot_remaining_for_transformation,
+    get_manual_sale_lot_choices,
+    get_manual_transformation_lot_choices,
+    get_transformation_rule,
+    to_decimal,
+)
 
 
 class DateInput(forms.DateInput):
@@ -220,8 +227,13 @@ class SaleRecordForm(BaseMovementForm):
 
 
 class TransformationRecordForm(forms.ModelForm):
-    source_unit = forms.ChoiceField(label='Unidade origem', choices=UNIT_CHOICES)
-    new_source_product_name = forms.CharField(label='Novo produto origem (opcional)', required=False)
+    source_lot = forms.ModelChoiceField(
+        label='Entrada/lote de tora',
+        queryset=TraceLot.objects.none(),
+        required=True,
+        empty_label='Selecione o lote de origem',
+    )
+    target_quantity = forms.DecimalField(label='Quantidade produzida', min_value=0.001)
     new_target_product_name = forms.CharField(label='Novo produto destino (opcional)', required=False)
     new_customer_name = forms.CharField(label='Novo cliente final (opcional)', required=False)
     supplier = forms.ModelChoiceField(
@@ -246,10 +258,9 @@ class TransformationRecordForm(forms.ModelForm):
             'customer',
             'supplier',
             'fsc_claim',
-            'source_product',
-            'source_quantity',
-            'source_unit',
+            'source_lot',
             'target_product',
+            'target_quantity',
             'notes',
             'attachment',
         ]
@@ -258,7 +269,7 @@ class TransformationRecordForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         participant = kwargs.pop('participant', None)
         super().__init__(*args, **kwargs)
-        self.fields['source_product'].queryset = Product.objects.filter(active=True).order_by('name')
+        self.participant = participant
         self.fields['target_product'].queryset = Product.objects.filter(active=True).order_by('name')
         customer_qs = Counterparty.objects.filter(type__in=['customer', 'both'])
         supplier_qs = Counterparty.objects.filter(type__in=['supplier', 'both'])
@@ -268,35 +279,86 @@ class TransformationRecordForm(forms.ModelForm):
         self.fields['customer'].queryset = customer_qs.order_by('name')
         self.fields['supplier'].queryset = supplier_qs.order_by('name')
         self.fields['new_customer_name'].help_text = 'Se informado, cria um novo cliente final para este participante.'
-        self.fields['supplier'].help_text = 'O fornecedor é herdado automaticamente dos lotes consumidos.'
-        self.fields['fsc_claim'].help_text = 'A declaração FSC é herdada automaticamente dos lotes consumidos.'
-        if self.instance and getattr(self.instance, 'pk', None):
-            self.fields['source_unit'].initial = self.instance.source_unit
+        self.fields['target_quantity'].help_text = 'Informe a quantidade produzida no produto destino. O sistema calculará automaticamente o consumo da tora pela regra de rendimento.'
+        self.fields['source_lot'].help_text = 'Selecione a entrada/lote de tora que será consumido na transformação. O sistema herdará fornecedor e declaração FSC desse lote.'
+        self.fields['supplier'].help_text = 'O fornecedor é herdado automaticamente do lote de origem.'
+        self.fields['fsc_claim'].help_text = 'A declaração FSC é herdada automaticamente do lote de origem.'
+        self.fields['target_product'].help_text = 'Selecione o produto final gerado. O rendimento cadastrado definirá o consumo da origem.'
+
+        selected_lot = None
+        if self.is_bound:
+            source_lot_id = self.data.get('source_lot')
+            if source_lot_id:
+                try:
+                    selected_lot = TraceLot.objects.select_related('supplier', 'product').get(pk=source_lot_id)
+                except TraceLot.DoesNotExist:
+                    selected_lot = None
+        elif self.instance and getattr(self.instance, 'pk', None):
+            existing_allocation = self.instance.source_lot_allocations.select_related('lot', 'lot__supplier', 'lot__product').first()
+            selected_lot = existing_allocation.lot if existing_allocation else None
+            if self.instance.target_quantity_base is not None:
+                self.fields['target_quantity'].initial = to_decimal(self.instance.target_quantity_base)
             self.fields['supplier'].initial = self.instance.supplier
             if self.instance.fsc_claim:
                 self.fields['fsc_claim'].initial = FSCClaim.objects.filter(name=self.instance.fsc_claim).first()
-        self.participant = participant
+
+        if participant:
+            lot_choices = get_manual_transformation_lot_choices(
+                participant,
+                transformation=self.instance if getattr(self.instance, 'pk', None) else None,
+                product=selected_lot.product if selected_lot else None,
+            )
+            lot_ids = [item['lot'].id for item in lot_choices]
+            self.fields['source_lot'].queryset = TraceLot.objects.filter(pk__in=lot_ids).select_related('product', 'supplier', 'entry', 'transformation').order_by('movement_date', 'id')
+            self.available_lot_choices = lot_choices
+        else:
+            self.available_lot_choices = []
+
+        if selected_lot:
+            self.fields['source_lot'].initial = selected_lot
+            self.fields['supplier'].initial = selected_lot.supplier
+            if selected_lot.fsc_claim:
+                self.fields['fsc_claim'].initial = FSCClaim.objects.filter(name=selected_lot.fsc_claim).first()
 
     def clean(self):
         cleaned = super().clean()
-        source_product = cleaned.get('source_product')
-        source_quantity = cleaned.get('source_quantity')
-        source_unit = cleaned.get('source_unit')
+        source_lot = cleaned.get('source_lot')
         target_product = cleaned.get('target_product')
-        new_source = (cleaned.get('new_source_product_name') or '').strip()
+        target_quantity = cleaned.get('target_quantity')
         new_target = (cleaned.get('new_target_product_name') or '').strip()
 
-        if new_source and not source_product and source_unit:
-            cleaned['new_source_product_payload'] = {'name': new_source, 'unit': source_unit}
         if new_target and not target_product:
             cleaned['new_target_product_payload'] = {'name': new_target}
 
-        if source_product and source_quantity and source_unit and target_product:
+        if source_lot:
+            cleaned['source_product'] = source_lot.product
+            cleaned['source_unit'] = source_lot.product.unit
+            cleaned['supplier'] = source_lot.supplier
+            cleaned['fsc_claim_name'] = source_lot.fsc_claim or ''
+        else:
+            cleaned['fsc_claim_name'] = ''
+
+        if source_lot and target_product and target_quantity:
             try:
-                source_quantity_base = convert_to_base(source_product, source_quantity, source_unit)
-                target_quantity_base = calculate_target_from_source(source_product, target_product, source_quantity_base, participant=self.participant)
-                cleaned['source_quantity_base'] = source_quantity_base
+                rule = get_transformation_rule(source_lot.product, target_product, participant=self.participant)
+                if not rule:
+                    raise ValueError('Não existe regra de transformação cadastrada para os produtos selecionados para esta empresa.')
+                target_quantity_base = convert_to_base(target_product, target_quantity, target_product.unit)
+                source_quantity_base = (to_decimal(target_quantity_base) / to_decimal(rule.yield_factor)).quantize(to_decimal('0.001'))
                 cleaned['target_quantity_base'] = target_quantity_base
+                cleaned['source_quantity_base'] = source_quantity_base
+                cleaned['yield_factor_snapshot'] = to_decimal(rule.yield_factor)
             except Exception as exc:
                 self.add_error(None, str(exc))
+                return cleaned
+
+            available = get_lot_remaining_for_transformation(
+                source_lot,
+                transformation=self.instance if getattr(self.instance, 'pk', None) else None,
+            )
+            if source_quantity_base > available:
+                self.add_error(
+                    'source_lot',
+                    f'Lote sem saldo suficiente. Disponível: {available} {source_lot.product.get_unit_display()}. Necessário para a produção informada: {source_quantity_base} {source_lot.product.get_unit_display()}.'
+                )
         return cleaned

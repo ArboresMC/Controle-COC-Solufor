@@ -337,20 +337,24 @@ class TransformationCreateView(LoginRequiredMixin, CreateView):
         kwargs['participant'] = self.request.user.participant
         return kwargs
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        form = ctx.get('form')
+        ctx['available_lots'] = getattr(form, 'available_lot_choices', []) if form else []
+        return ctx
+
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_manager or request.user.is_auditor or not request.user.participant:
             return redirect('dashboard')
         return super().dispatch(request, *args, **kwargs)
 
     def _resolve_products(self, form):
-        source_product = form.cleaned_data.get('source_product')
+        source_lot = form.cleaned_data.get('source_lot')
+        source_product = source_lot.product if source_lot else None
         target_product = form.cleaned_data.get('target_product')
-        source_payload = form.cleaned_data.get('new_source_product_payload')
         target_payload = form.cleaned_data.get('new_target_product_payload')
-        if source_payload:
-            source_product, _ = Product.objects.get_or_create(name=source_payload['name'], defaults={'unit': source_payload['unit'], 'active': True})
         if target_payload:
-            base_unit = target_product.unit if target_product else (source_product.unit if source_product else 'm3')
+            base_unit = target_product.unit if target_product else 'm3'
             target_product, _ = Product.objects.get_or_create(name=target_payload['name'], defaults={'unit': base_unit, 'active': True})
         return source_product, target_product
 
@@ -373,25 +377,22 @@ class TransformationCreateView(LoginRequiredMixin, CreateView):
         obj.document_number = form.cleaned_data.get('document_number', '')
         obj.supplier = None
         obj.fsc_claim = ''
+        preferred_lot = form.cleaned_data['source_lot']
         obj.source_product, obj.target_product = self._resolve_products(form)
-        obj.source_unit = form.cleaned_data['source_unit']
-        obj.source_quantity_base = convert_to_base(obj.source_product, obj.source_quantity, obj.source_unit)
-        obj.target_quantity_base = calculate_target_from_source(obj.source_product, obj.target_product, obj.source_quantity_base, participant=obj.participant)
+        obj.source_unit = obj.source_product.unit
+        obj.source_quantity_base = form.cleaned_data['source_quantity_base']
+        obj.source_quantity = obj.source_quantity_base
+        obj.target_quantity_base = form.cleaned_data['target_quantity_base']
         obj.target_unit_snapshot = obj.target_product.unit
-        rule = get_transformation_rule(obj.source_product, obj.target_product, participant=obj.participant)
-        obj.yield_factor_snapshot = rule.yield_factor
-        available = get_available_balance(self.request.user.participant, obj.source_product)
-        if obj.source_quantity_base > available:
-            form.add_error('source_quantity', f'Saldo insuficiente do produto origem. Disponível: {available} {obj.source_product.get_unit_display()}. Solicitado: {obj.source_quantity_base} {obj.source_product.get_unit_display()}.')
-            return self.form_invalid(form)
+        obj.yield_factor_snapshot = form.cleaned_data['yield_factor_snapshot']
         try:
             with transaction.atomic():
                 obj.save()
-                reallocate_transformation_sources(obj)
+                reallocate_transformation_sources(obj, preferred_lot=preferred_lot)
                 sync_transformation_metadata(obj)
                 sync_transformation_target_lot(obj)
         except Exception as exc:
-            form.add_error('source_quantity', str(exc))
+            form.add_error('source_lot', str(exc))
             return self.form_invalid(form)
         messages.success(self.request, f'Transformação salva. Gerados {obj.target_quantity_base} {obj.target_product.get_unit_display()} de {obj.target_product}.')
         return redirect(self.success_url)
@@ -406,32 +407,28 @@ class TransformationUpdateView(TransformationCreateView, UpdateView):
 
     def form_valid(self, form):
         obj = form.save(commit=False)
-        old = self.get_object()
         obj.created_by = self.request.user
         obj.participant = self.request.user.participant
         obj.customer = self._resolve_customer(form)
         obj.document_number = form.cleaned_data.get('document_number', '')
         obj.supplier = None
         obj.fsc_claim = ''
+        preferred_lot = form.cleaned_data['source_lot']
         obj.source_product, obj.target_product = self._resolve_products(form)
-        obj.source_unit = form.cleaned_data['source_unit']
-        obj.source_quantity_base = convert_to_base(obj.source_product, obj.source_quantity, obj.source_unit)
-        obj.target_quantity_base = calculate_target_from_source(obj.source_product, obj.target_product, obj.source_quantity_base, participant=obj.participant)
+        obj.source_unit = obj.source_product.unit
+        obj.source_quantity_base = form.cleaned_data['source_quantity_base']
+        obj.source_quantity = obj.source_quantity_base
+        obj.target_quantity_base = form.cleaned_data['target_quantity_base']
         obj.target_unit_snapshot = obj.target_product.unit
-        rule = get_transformation_rule(obj.source_product, obj.target_product, participant=obj.participant)
-        obj.yield_factor_snapshot = rule.yield_factor
-        available = get_available_balance(self.request.user.participant, obj.source_product) + old.source_quantity_base
-        if obj.source_quantity_base > available:
-            form.add_error('source_quantity', f'Saldo insuficiente do produto origem. Disponível: {available} {obj.source_product.get_unit_display()}. Solicitado: {obj.source_quantity_base} {obj.source_product.get_unit_display()}.')
-            return self.form_invalid(form)
+        obj.yield_factor_snapshot = form.cleaned_data['yield_factor_snapshot']
         try:
             with transaction.atomic():
                 obj.save()
-                reallocate_transformation_sources(obj)
+                reallocate_transformation_sources(obj, preferred_lot=preferred_lot)
                 sync_transformation_metadata(obj)
                 sync_transformation_target_lot(obj)
         except Exception as exc:
-            form.add_error('source_quantity', str(exc))
+            form.add_error('source_lot', str(exc))
             return self.form_invalid(form)
         messages.success(self.request, 'Transformação atualizada com sucesso.')
         return redirect(self.success_url)

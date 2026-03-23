@@ -31,7 +31,6 @@ class TraceSource:
     unit_label: str
 
 
-
 def get_unit_conversion_factor(product, from_unit: str) -> Decimal:
     if not from_unit:
         raise ValueError('Unidade não informada.')
@@ -57,12 +56,10 @@ def get_unit_conversion_factor(product, from_unit: str) -> Decimal:
     raise ValueError(f'Não existe fator de conversão cadastrado para {product} de {from_unit} para {base_unit}.')
 
 
-
 def convert_to_base(product, quantity, from_unit: str) -> Decimal:
     quantity = to_decimal(quantity)
     factor = get_unit_conversion_factor(product, from_unit)
     return (quantity * factor).quantize(Decimal('0.001'))
-
 
 
 def get_transformation_rule(source_product, target_product, participant=None):
@@ -78,7 +75,6 @@ def get_transformation_rule(source_product, target_product, participant=None):
     return qs.filter(participant__isnull=True).first()
 
 
-
 def calculate_target_from_source(source_product, target_product, source_quantity_base, participant=None):
     source_quantity_base = to_decimal(source_quantity_base)
     rule = get_transformation_rule(source_product, target_product, participant=participant)
@@ -87,15 +83,12 @@ def calculate_target_from_source(source_product, target_product, source_quantity
     return (source_quantity_base * rule.yield_factor).quantize(Decimal('0.001'))
 
 
-
 def _lot_allocated_total(lot):
     return to_decimal(lot.allocations.aggregate(total=Sum('quantity_base'))['total'])
 
 
-
 def get_lot_remaining(lot):
     return (to_decimal(lot.quantity_base) - _lot_allocated_total(lot)).quantize(Decimal('0.001'))
-
 
 
 def get_lot_remaining_for_sale(lot, sale=None):
@@ -107,6 +100,15 @@ def get_lot_remaining_for_sale(lot, sale=None):
         remaining += current
     return remaining.quantize(Decimal('0.001'))
 
+
+def get_lot_remaining_for_transformation(lot, transformation=None):
+    remaining = get_lot_remaining(lot)
+    if transformation and getattr(transformation, 'pk', None):
+        current = to_decimal(
+            lot.allocations.filter(target_type='transformation', transformation=transformation).aggregate(total=Sum('quantity_base'))['total']
+        )
+        remaining += current
+    return remaining.quantize(Decimal('0.001'))
 
 
 def _normalize_claim(value):
@@ -140,8 +142,6 @@ def sync_entry_lot(entry):
     lot.unit_snapshot = entry.unit_snapshot
     lot.save()
     return lot
-
-
 
 
 def sync_transformation_target_lot(transformation):
@@ -200,7 +200,6 @@ def sync_transformation_metadata(transformation):
     return transformation
 
 
-
 def _available_lots(participant, product, *, sale=None, include_lot_ids=None, fsc_claim=None, supplier=None):
     lots = TraceLot.objects.filter(participant=participant, product=product)
     if fsc_claim:
@@ -221,7 +220,6 @@ def _available_lots(participant, product, *, sale=None, include_lot_ids=None, fs
         if remaining > 0:
             items.append((lot, remaining))
     return items
-
 
 
 def get_manual_sale_lot_choices(participant, product=None, sale=None, fsc_claim=None):
@@ -254,6 +252,34 @@ def get_manual_sale_lot_choices(participant, product=None, sale=None, fsc_claim=
         })
     return lots
 
+
+def get_manual_transformation_lot_choices(participant, transformation=None, product=None):
+    current_ids = []
+    if transformation and getattr(transformation, 'pk', None):
+        current_ids = list(transformation.source_lot_allocations.values_list('lot_id', flat=True))
+
+    qs = TraceLot.objects.filter(participant=participant, source_type='entry')
+    if product:
+        qs = qs.filter(models.Q(product=product) | models.Q(pk__in=current_ids))
+    elif current_ids:
+        qs = qs.filter(models.Q(pk__in=current_ids) | models.Q())
+
+    qs = qs.select_related('product', 'supplier', 'entry').order_by('movement_date', 'id')
+
+    lots = []
+    for lot in qs:
+        remaining = get_lot_remaining_for_transformation(lot, transformation=transformation)
+        if remaining <= 0:
+            continue
+        supplier_label, source_label = describe_lot_origins(lot)
+        lots.append({
+            'lot': lot,
+            'remaining': remaining.quantize(Decimal('0.001')),
+            'supplier': supplier_label,
+            'source_label': source_label,
+            'unit': lot.product.get_unit_display(),
+        })
+    return lots
 
 
 def allocate_quantity_to_lots(participant, product, quantity_base, *, sale=None, transformation=None, preferred_lot=None, fsc_claim=None):
@@ -347,15 +373,15 @@ def reallocate_sale(sale, preferred_lot=None):
 
 
 @transaction.atomic
-def reallocate_transformation_sources(transformation):
+def reallocate_transformation_sources(transformation, preferred_lot=None):
     transformation.source_lot_allocations.all().delete()
     return allocate_quantity_to_lots(
         transformation.participant,
         transformation.source_product,
         transformation.source_quantity_base,
         transformation=transformation,
+        preferred_lot=preferred_lot,
     )
-
 
 
 def get_available_balance(participant, product, statuses=None):
@@ -365,11 +391,9 @@ def get_available_balance(participant, product, statuses=None):
         if lot.entry_id and statuses is not None and lot.entry.status not in statuses:
             continue
         if lot.transformation_id and statuses is not None:
-            # Transformações ainda não possuem status. Mantém no saldo projetado e validado.
             pass
         total += get_lot_remaining(lot)
     return total.quantize(Decimal('0.001'))
-
 
 
 def get_balance_items(participant, projected=False):
@@ -387,7 +411,6 @@ def get_balance_items(participant, projected=False):
     return items
 
 
-
 def classify_balance(value):
     value = to_decimal(value)
     if value <= Decimal('1'):
@@ -395,7 +418,6 @@ def classify_balance(value):
     if value <= Decimal('5'):
         return 'warning'
     return 'success'
-
 
 
 def get_participant_balance_summary(participant):
@@ -408,7 +430,6 @@ def get_participant_balance_summary(participant):
         'balance_count': total_items,
         'low_count': total_low,
     }
-
 
 
 def _origin_entry_ids_for_lot(lot, visited=None):
@@ -427,7 +448,6 @@ def _origin_entry_ids_for_lot(lot, visited=None):
     return set()
 
 
-
 def describe_lot_origins(lot):
     if lot.entry_id:
         supplier = str(lot.supplier) if lot.supplier_id else 'Sem fornecedor'
@@ -441,7 +461,6 @@ def describe_lot_origins(lot):
     supplier_label = ', '.join(suppliers) if suppliers else 'Sem fornecedor'
     source_label = f'{lot.label} · origens: ' + ', '.join(sorted({e.document_number for e in entries}))
     return supplier_label, source_label
-
 
 
 def build_traceability_rows(participant=None, product=None):
@@ -485,7 +504,6 @@ def build_traceability_rows(participant=None, product=None):
             'destination_label': destination_label,
         })
     return rows
-
 
 
 def get_entry_balance_rows(participant=None):
