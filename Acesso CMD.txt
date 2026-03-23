@@ -1,0 +1,4 @@
+cd C:\Users\eduar\OneDrive\Desktop\Controle-COC-Solufor
+.venv\Scripts\activate
+python manage.py migrate
+python manage.py runserver
