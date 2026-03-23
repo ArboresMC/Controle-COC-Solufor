@@ -320,7 +320,7 @@ class TransformationRecordForm(forms.ModelForm):
             if selected_lot.fsc_claim:
                 self.fields['fsc_claim'].initial = FSCClaim.objects.filter(name=selected_lot.fsc_claim).first()
 
-    def clean(self):
+       def clean(self):
         cleaned = super().clean()
         source_lot = cleaned.get('source_lot')
         target_product = cleaned.get('target_product')
@@ -362,3 +362,10 @@ class TransformationRecordForm(forms.ModelForm):
                     f'Lote sem saldo suficiente. Disponível: {available} {source_lot.product.get_unit_display()}. Necessário para a produção informada: {source_quantity_base} {source_lot.product.get_unit_display()}.'
                 )
         return cleaned
+
+    def _post_clean(self):
+        self.instance.source_product = self.cleaned_data.get('source_product')
+        self.instance.source_quantity = self.cleaned_data.get('source_quantity_base')
+        self.instance.source_unit = self.cleaned_data.get('source_unit')
+        self.instance.target_product = self.cleaned_data.get('target_product')
+        super()._post_clean()
