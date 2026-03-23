@@ -92,8 +92,8 @@ a:hover { text-decoration: underline; }
 .topbar {
   position: sticky; top: 0; z-index: 10;
   backdrop-filter: blur(14px);
-  background: rgba(255,255,255,.74);
-  border-bottom: 1px solid rgba(20,83,45,.08);
+  background: linear-gradient(135deg, #0B3C4A 0%, #006E91 100%);
+  border-bottom: 1px solid rgba(255,255,255,.08);
 }
 .topbar-inner {
   max-width: 1280px; margin: 0 auto; padding: 14px 24px;
@@ -236,6 +236,15 @@ input[type='checkbox'] { width: auto; }
   .topbar-inner, .page { padding-left: 16px; padding-right: 16px; }
   .hero { padding: 22px; }
   .brand-logo { width: 72px; max-width: 72px; flex-basis: 72px; }
+}
+/* REMOVE LOGO DO SIDEBAR */
+.brand-logo {
+  display: none;
+}
+
+/* AJUSTA ESPAÇO DO TEXTO */
+.sidebar-brand {
+  gap: 0;
 }
   </style>
 </head>
@@ -450,5 +459,22 @@ input:focus, select:focus, textarea:focus {
 }
 .metric-card::after {
   background: rgba(0,110,145,.08) !important;
+}
+/* TEXTO DO HEADER MAIS LEGÍVEL */
+.topbar-copy strong {
+  color: #ffffff;
+}
+
+.topbar-copy span {
+  color: rgba(255,255,255,.78);
+}
+
+.userbox strong {
+  color: #ffffff;
+}
+
+.userbox span,
+.userbox a {
+  color: rgba(255,255,255,.78);
 }
 </style>
