@@ -4,6 +4,7 @@ from .views import (
     SaleCreateView, SaleListView, SaleUpdateView,
     TransformationCreateView, TransformationListView, TransformationUpdateView,
     ManagerReviewEntryListView, ManagerReviewSaleListView,
+    DocumentCenterView,
 )
 
 urlpatterns = [
@@ -18,4 +19,5 @@ urlpatterns = [
     path('transformations/<int:pk>/edit/', TransformationUpdateView.as_view(), name='transformation_update'),
     path('manager/review/entries/', ManagerReviewEntryListView.as_view(), name='manager_review_entries'),
     path('manager/review/sales/', ManagerReviewSaleListView.as_view(), name='manager_review_sales'),
+    path('documents/', DocumentCenterView.as_view(), name='document_center'),
 ]

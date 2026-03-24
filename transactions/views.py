@@ -84,6 +84,44 @@ class ParticipantScopedMixin(LoginRequiredMixin):
         if user.participant: return qs.filter(participant=user.participant)
         return qs.none()
 
+class DocumentCenterView(LoginRequiredMixin, TemplateView):
+    template_name = 'transactions/document_center.html'
+
+    def _filter_docs(self, qs):
+        return qs.filter(attachment__isnull=False).exclude(attachment='')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        current_org = getattr(user, 'current_organization', None)
+
+        entry_qs = EntryRecord.objects.select_related('participant', 'product', 'supplier')
+        sale_qs = SaleRecord.objects.select_related('participant', 'product', 'customer')
+        transformation_qs = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
+
+        if user.is_manager or user.is_auditor:
+            if current_org:
+                entry_qs = entry_qs.filter(participant__organization=current_org)
+                sale_qs = sale_qs.filter(participant__organization=current_org)
+                transformation_qs = transformation_qs.filter(participant__organization=current_org)
+            else:
+                entry_qs = EntryRecord.objects.none()
+                sale_qs = SaleRecord.objects.none()
+                transformation_qs = TransformationRecord.objects.none()
+        elif getattr(user, 'participant', None):
+            entry_qs = entry_qs.filter(participant=user.participant)
+            sale_qs = sale_qs.filter(participant=user.participant)
+            transformation_qs = transformation_qs.filter(participant=user.participant)
+        else:
+            entry_qs = EntryRecord.objects.none()
+            sale_qs = SaleRecord.objects.none()
+            transformation_qs = TransformationRecord.objects.none()
+
+        ctx['entry_docs'] = self._filter_docs(entry_qs).order_by('-movement_date', '-id')[:100]
+        ctx['sale_docs'] = self._filter_docs(sale_qs).order_by('-movement_date', '-id')[:100]
+        ctx['transformation_docs'] = self._filter_docs(transformation_qs).order_by('-movement_date', '-id')[:100]
+        return ctx
+
 class EntryListView(ParticipantScopedMixin, ListView):
     model = EntryRecord; template_name = 'transactions/entry_list.html'; context_object_name = 'records'
 

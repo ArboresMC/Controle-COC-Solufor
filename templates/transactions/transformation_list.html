@@ -2,29 +2,50 @@
 {% block content %}
 <div class="card">
   <div class="listing-head">
-    <h2>Transformações</h2>
+    <div>
+      <div class="kicker">Processo</div>
+      <h2 class="card-title">Transformações</h2>
+      <p class="card-subtitle">Consumo de produto origem com geração automática do produto destino e registro documental da saída do processo.</p>
+    </div>
+    {% if user.is_participant_user %}<a class="btn" href="/transactions/transformations/new/">Nova transformação</a>{% endif %}
   </div>
+
+  <style>
+    .doc-action {
+      display: inline-flex; align-items: center; gap: .5rem; padding: .5rem .85rem; border-radius: 999px;
+      border: 1px solid rgba(12, 117, 152, 0.18); background: linear-gradient(180deg, #ffffff 0%, #f4fbff 100%);
+      color: #0b6280; font-weight: 700; font-size: .88rem; line-height: 1; text-decoration: none;
+      box-shadow: 0 8px 18px rgba(8, 72, 95, 0.10); transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, color .18s ease; white-space: nowrap;
+    }
+    .doc-action:hover { transform: translateY(-1px); color: #ffffff; border-color: #0b7fa3; background: linear-gradient(135deg, #0b7fa3 0%, #0a6b8a 100%); box-shadow: 0 12px 24px rgba(8, 72, 95, 0.18); text-decoration: none; }
+    .doc-action:focus { outline: none; color: #ffffff; border-color: #0b7fa3; background: linear-gradient(135deg, #0b7fa3 0%, #0a6b8a 100%); box-shadow: 0 0 0 4px rgba(11, 127, 163, 0.14); text-decoration: none; }
+    .doc-action svg { width: 16px; height: 16px; flex: 0 0 16px; }
+    .doc-empty { color: #8aa1ad; font-weight: 600; }
+  </style>
+
   {% if records %}
-  <table>
-    <tr>
-      <th>Data</th>
-      <th>Origem</th>
-      <th>Destino</th>
-      <th>Documentos</th>
-    </tr>
+  <div class="table-wrap"><table>
+    <tr><th>Data</th><th>Documento / cliente</th><th>Origem</th><th>Destino</th><th>Fornecedor / FSC</th><th>Rendimento</th><th>Documentos</th><th></th></tr>
     {% for r in records %}
     <tr>
       <td>{{ r.movement_date|date:"d/m/Y" }}</td>
-      <td>{{ r.source_product }}</td>
-      <td>{{ r.target_product }}</td>
+      <td>{{ r.document_number|default:'—' }}<br><span class="muted">{{ r.customer|default:'Sem cliente final' }}</span></td>
+      <td><strong>{{ r.source_product }}</strong><br>{{ r.source_quantity }} {{ r.source_unit }}<br><span class="muted">{{ r.source_quantity_base }} {{ r.source_product.get_unit_display }}</span></td>
+      <td><strong>{{ r.target_product }}</strong><br>{{ r.target_quantity_base }} {{ r.target_product.get_unit_display }}</td>
+      <td>{{ r.supplier|default:'—' }}<br><span class="muted">{{ r.fsc_claim|default:'Sem declaração' }}</span></td>
+      <td>{{ r.yield_factor_snapshot }}</td>
       <td>
-        {% if r.document_file %}
-          <a class="btn secondary" href="{{ r.document_file.url }}" target="_blank">📄 PDF</a>
-        {% else %}-{% endif %}
+        {% if r.attachment %}
+          <a class="doc-action" href="{{ r.attachment.url }}" target="_blank" rel="noopener noreferrer" title="Abrir documento">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9l-4-6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v6h4" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 14h6M9 17h6M9 11h2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span>PDF</span>
+          </a>
+        {% else %}<span class="doc-empty">—</span>{% endif %}
       </td>
+      <td>{% if user.is_participant_user %}<a class="inline-link" href="/transactions/transformations/{{ r.id }}/edit/">Editar</a>{% endif %}</td>
     </tr>
     {% endfor %}
-  </table>
-  {% endif %}
+  </table></div>
+  {% else %}<div class="empty-state">Nenhuma transformação registrada ainda.</div>{% endif %}
 </div>
 {% endblock %}
