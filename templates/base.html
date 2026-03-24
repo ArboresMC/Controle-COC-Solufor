@@ -270,7 +270,7 @@ input[type='checkbox'] { width: auto; }
             <a class="sidebar-link {% if request.path == '/' %}is-active{% endif %}" href="/"><span class="sidebar-icon">🏠</span><span class="sidebar-link-text">Dashboard</span></a>
           </nav>
         </div>
-        {% if user.is_participant_user or user.is_manager %}
+        {% if user.is_participant_user %}
         <div class="sidebar-section">
           <div class="sidebar-label">Operação</div>
           <nav class="sidebar-nav">
@@ -306,6 +306,7 @@ input[type='checkbox'] { width: auto; }
           <div class="sidebar-label">Controle</div>
           <nav class="sidebar-nav">
             <a class="sidebar-link {% if '/transactions/manager/review/' in request.path %}is-active{% endif %}" href="/transactions/manager/review/entries/"><span class="sidebar-icon">✅</span><span class="sidebar-link-text">Revisão</span></a>
+            <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon">📎</span><span class="sidebar-link-text">Documentos</span></a>
             <a class="sidebar-link {% if '/reports/traceability/' in request.path %}is-active{% endif %}" href="/reports/traceability/"><span class="sidebar-icon">🔎</span><span class="sidebar-link-text">Rastreabilidade</span></a>
             <a class="sidebar-link" href="/reports/consolidated.xlsx"><span class="sidebar-icon">📄</span><span class="sidebar-link-text">Relatório FSC</span></a>
             <a class="sidebar-link {% if '/admin/' in request.path %}is-active{% endif %}" href="/admin/"><span class="sidebar-icon">🛠️</span><span class="sidebar-link-text">Admin</span></a>
