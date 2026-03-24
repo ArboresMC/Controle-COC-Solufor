@@ -5,6 +5,35 @@ from django.db import models
 from django.utils import timezone
 
 
+def _safe_org_slug(instance):
+    participant = getattr(instance, 'participant', None)
+    organization = getattr(participant, 'organization', None) if participant else None
+    return getattr(organization, 'slug', None) or 'sem-organizacao'
+
+
+def _document_filename(instance, filename):
+    document = getattr(instance, 'document_number', '') or 'sem-documento'
+    safe_document = ''.join(ch if ch.isalnum() or ch in ('-', '_') else '-' for ch in str(document)).strip('-') or 'sem-documento'
+    return f"{safe_document}-{filename}"
+
+
+def _movement_attachment_path(instance, movement_type, filename):
+    date_value = getattr(instance, 'movement_date', None) or timezone.localdate()
+    return f"documents/{_safe_org_slug(instance)}/{movement_type}/{date_value:%Y/%m}/{_document_filename(instance, filename)}"
+
+
+def entry_attachment_path(instance, filename):
+    return _movement_attachment_path(instance, 'entradas', filename)
+
+
+def sale_attachment_path(instance, filename):
+    return _movement_attachment_path(instance, 'saidas', filename)
+
+
+def transformation_attachment_path(instance, filename):
+    return _movement_attachment_path(instance, 'transformacoes', filename)
+
+
 class BaseMovement(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Rascunho'),
@@ -23,7 +52,7 @@ class BaseMovement(models.Model):
     fsc_claim = models.CharField('Declaração FSC', max_length=100, blank=True)
     batch_code = models.CharField('Lote', max_length=100, blank=True)
     notes = models.TextField('Observações', blank=True)
-    attachment = models.FileField(upload_to='attachments/%Y/%m/', blank=True, null=True)
+    attachment = models.FileField(upload_to=entry_attachment_path, blank=True, null=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -54,6 +83,7 @@ class EntryRecord(BaseMovement):
 
 
 class SaleRecord(BaseMovement):
+    attachment = models.FileField(upload_to=sale_attachment_path, blank=True, null=True)
     customer = models.ForeignKey('catalog.Counterparty', on_delete=models.PROTECT, related_name='sales')
     supplier = models.ForeignKey(
         'catalog.Counterparty',
@@ -98,7 +128,7 @@ class TransformationRecord(models.Model):
     target_unit_snapshot = models.CharField('Unidade base destino', max_length=10, choices=[('m3', 'm³'), ('kg', 'kg'), ('t', 't'), ('un', 'un')])
     yield_factor_snapshot = models.DecimalField('Fator de rendimento aplicado', max_digits=14, decimal_places=6, default=0)
     notes = models.TextField('Observações', blank=True)
-    attachment = models.FileField(upload_to='transformations/%Y/%m/', blank=True, null=True)
+    attachment = models.FileField(upload_to=transformation_attachment_path, blank=True, null=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
