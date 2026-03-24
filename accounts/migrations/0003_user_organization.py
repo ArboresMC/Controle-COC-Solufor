@@ -4,10 +4,10 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('participants', '0002_organization_participant_org'),
-        ('accounts', '0001_initial'),
-    ]
+dependencies = [
+    ('participants', '0002_organization_participant_org'),
+    ('accounts', '0002_bootstrap_admin'),
+]
 
     operations = [
         migrations.AddField(
