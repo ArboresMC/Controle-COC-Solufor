@@ -11,19 +11,33 @@
   </div>
   {% if records %}
   <div class="table-wrap"><table>
-    <tr><th>Data</th><th>Documento</th><th>Produto</th><th>Fornecedor</th><th>Quantidade</th><th>Status</th><th></th></tr>
+    <tr>
+      <th>Data</th>
+      <th>Documento</th>
+      <th>Produto</th>
+      <th>Fornecedor</th>
+      <th>Quantidade</th>
+      <th>Status</th>
+      <th>Documentos</th>
+      <th></th>
+    </tr>
     {% for r in records %}
     <tr>
       <td>{{ r.movement_date|date:"d/m/Y" }}</td>
       <td>{{ r.document_number }}</td>
       <td><strong>{{ r.product }}</strong></td>
       <td>{{ r.supplier }}</td>
-      <td>{{ r.quantity }} {{ r.movement_unit }}<br><span class="muted">{{ r.quantity_base }} {{ r.get_unit_snapshot_display }}</span></td>
-      <td><span class="badge {% if r.status == 'reviewed' %}success{% elif r.status == 'needs_correction' %}warning{% else %}neutral{% endif %}">{{ r.get_status_display }}</span></td>
-      <td>{% if user.is_participant_user %}<a class="inline-link" href="/transactions/entries/{{ r.id }}/edit/">Editar</a>{% endif %}</td>
+      <td>{{ r.quantity }} {{ r.movement_unit }}</td>
+      <td>{{ r.get_status_display }}</td>
+      <td>
+        {% if r.document_file %}
+          <a class="btn secondary" href="{{ r.document_file.url }}" target="_blank">📄 PDF</a>
+        {% else %}-{% endif %}
+      </td>
+      <td><a href="/transactions/entries/{{ r.id }}/edit/">Editar</a></td>
     </tr>
     {% endfor %}
   </table></div>
-  {% else %}<div class="empty-state">Nenhuma entrada cadastrada ainda.</div>{% endif %}
+  {% endif %}
 </div>
 {% endblock %}

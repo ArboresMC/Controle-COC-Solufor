@@ -2,28 +2,35 @@
 {% block content %}
 <div class="card">
   <div class="listing-head">
-    <div>
-      <div class="kicker">Movimentações</div>
-      <h2 class="card-title">Saídas</h2>
-      <p class="card-subtitle">Vendas e expedições com validação de saldo disponível.</p>
-    </div>
-    {% if user.is_participant_user %}<a class="btn" href="/transactions/sales/new/">Nova saída</a>{% endif %}
+    <h2>Saídas</h2>
   </div>
   {% if records %}
-  <div class="table-wrap"><table>
-    <tr><th>Data</th><th>Documento</th><th>Produto</th><th>Cliente</th><th>Quantidade</th><th>Status</th><th></th></tr>
+  <table>
+    <tr>
+      <th>Data</th>
+      <th>Documento</th>
+      <th>Produto</th>
+      <th>Cliente</th>
+      <th>Quantidade</th>
+      <th>Status</th>
+      <th>Documentos</th>
+    </tr>
     {% for r in records %}
     <tr>
       <td>{{ r.movement_date|date:"d/m/Y" }}</td>
       <td>{{ r.document_number }}</td>
-      <td><strong>{{ r.product }}</strong></td>
+      <td>{{ r.product }}</td>
       <td>{{ r.customer }}</td>
-      <td>{{ r.quantity }} {{ r.movement_unit }}<br><span class="muted">{{ r.quantity_base }} {{ r.get_unit_snapshot_display }}</span></td>
-      <td><span class="badge {% if r.status == 'reviewed' %}success{% elif r.status == 'needs_correction' %}warning{% else %}neutral{% endif %}">{{ r.get_status_display }}</span></td>
-      <td>{% if user.is_participant_user %}<a class="inline-link" href="/transactions/sales/{{ r.id }}/edit/">Editar</a>{% endif %}</td>
+      <td>{{ r.quantity }}</td>
+      <td>{{ r.get_status_display }}</td>
+      <td>
+        {% if r.document_file %}
+          <a class="btn secondary" href="{{ r.document_file.url }}" target="_blank">📄 PDF</a>
+        {% else %}-{% endif %}
+      </td>
     </tr>
     {% endfor %}
-  </table></div>
-  {% else %}<div class="empty-state">Nenhuma saída cadastrada ainda.</div>{% endif %}
+  </table>
+  {% endif %}
 </div>
 {% endblock %}
