@@ -1,11 +1,37 @@
 from django.db import models
 
+
+class Organization(models.Model):
+    name = models.CharField('Nome do ambiente', max_length=255, unique=True)
+    legal_name = models.CharField('Razão social do ambiente', max_length=255, blank=True)
+    slug = models.SlugField('Slug', max_length=100, unique=True)
+    is_active = models.BooleanField('Ativo', default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Ambiente'
+        verbose_name_plural = 'Ambientes'
+
+    def __str__(self):
+        return self.name
+
+
 class Participant(models.Model):
     STATUS_CHOICES = [
         ('active', 'Ativo'),
         ('inactive', 'Inativo'),
         ('suspended', 'Suspenso'),
     ]
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='participants',
+        verbose_name='Ambiente',
+    )
     legal_name = models.CharField('Razão social', max_length=255)
     trade_name = models.CharField('Nome fantasia', max_length=255, blank=True)
     cnpj = models.CharField('CNPJ', max_length=18, unique=True)
