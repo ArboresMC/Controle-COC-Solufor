@@ -30,10 +30,10 @@ def backwards(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
-  dependencies = [
-    ('participants', '0003_backfill_existing_participants_to_default_org'),
-    ('accounts', '0003_user_organization'),
-]
+    dependencies = [
+        ('participants', '0003_backfill_existing_participants_to_default_org'),
+        ('accounts', '0003_user_organization'),
+    ]
 
     operations = [
         migrations.RunPython(forwards, backwards),
