@@ -1,4 +1,7 @@
 from decimal import Decimal
+from unicodedata import normalize
+
+from django.db import transaction
 from io import BytesIO
 
 import openpyxl
@@ -41,11 +44,62 @@ def _safe_str(value):
 
 
 def _normalize_date(value):
+    if hasattr(value, 'date'):
+        return value.date()
     return value
 
 
 def _decimal(value):
     return Decimal(str(value)) if value not in (None, '') else Decimal('0')
+
+
+def _normalize_header(value):
+    text = normalize('NFKD', _safe_str(value)).encode('ascii', 'ignore').decode('ascii')
+    return text.lower().replace(' ', '_')
+
+
+def _sheet_rows(sheet):
+    headers = [_normalize_header(cell) for cell in next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), [])]
+    for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        values = list(row)
+        if not any(value not in (None, '') for value in values):
+            continue
+        payload = {}
+        for pos, header in enumerate(headers):
+            if header:
+                payload[header] = values[pos] if pos < len(values) else None
+        yield idx, payload
+
+
+def _first_present(row, *keys):
+    for key in keys:
+        if key in row:
+            return row.get(key)
+    return None
+
+
+def _coerce_product(product_name, *, default_unit=None, create_if_missing=False):
+    product_name = _safe_str(product_name)
+    if not product_name:
+        raise ValueError('Produto não informado.')
+    if create_if_missing:
+        product, _ = Product.objects.get_or_create(
+            name=product_name,
+            defaults={'unit': default_unit or 'm3', 'active': True},
+        )
+        return product
+    return Product.objects.get(name=product_name)
+
+
+def _get_or_create_counterparty(participant, name, *, type_):
+    normalized_name = _safe_str(name)
+    if not normalized_name:
+        return None
+    return Counterparty.objects.get_or_create(
+        participant=participant,
+        name=normalized_name,
+        defaults={'type': type_},
+    )[0]
 
 
 def _build_import_preview(workbook, participant, user, persist=False):
@@ -55,105 +109,183 @@ def _build_import_preview(workbook, participant, user, persist=False):
 
     if 'Entradas' in workbook.sheetnames:
         sheet = workbook['Entradas']
-        for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not row or not row[0]:
-                continue
-            data, documento, fornecedor_nome, produto_nome, quantidade, unidade, declaracao, lote, observacoes = (list(row) + [None] * 9)[:9]
+        for idx, row in _sheet_rows(sheet):
             try:
-                produto_nome = _safe_str(produto_nome)
-                if not produto_nome:
-                    raise ValueError('Produto não informado.')
+                data = _first_present(row, 'data')
+                if not data:
+                    raise ValueError('Data não informada.')
+                documento = _first_present(row, 'documento')
+                fornecedor_nome = _first_present(row, 'fornecedor')
+                produto_nome = _first_present(row, 'produto')
+                quantidade = _first_present(row, 'quantidade')
+                unidade = _first_present(row, 'unidade')
+                declaracao = _first_present(row, 'declaracao_fsc')
+                lote = _first_present(row, 'lote')
+                observacoes = _first_present(row, 'observacoes')
+
                 unidade = _safe_str(unidade) or 'm3'
-                product, _ = Product.objects.get_or_create(name=produto_nome, defaults={'unit': unidade, 'active': True})
+                product = _coerce_product(produto_nome, default_unit=unidade, create_if_missing=True)
                 supplier_name = _safe_str(fornecedor_nome) or 'Não informado'
-                supplier, _ = Counterparty.objects.get_or_create(participant=participant, name=supplier_name, defaults={'type': 'supplier'})
+                supplier = _get_or_create_counterparty(participant, supplier_name, type_='supplier')
                 quantidade = _decimal(quantidade)
                 quantity_base = convert_to_base(product, quantidade, unidade)
                 preview = {
-                    'linha': idx, 'data': data, 'documento': _safe_str(documento), 'supplier': supplier_name,
-                    'product': product.name, 'quantity': quantidade, 'unit': unidade, 'quantity_base': quantity_base,
+                    'linha': idx,
+                    'data': data,
+                    'documento': _safe_str(documento),
+                    'supplier': supplier_name,
+                    'product': product.name,
+                    'quantity': quantidade,
+                    'unit': unidade,
+                    'quantity_base': quantity_base,
                 }
                 previews['entries'].append(preview)
+                summary['entries'] += 1
                 if persist:
                     obj = EntryRecord.objects.create(
-                        participant=participant, movement_date=_normalize_date(data), document_number=_safe_str(documento),
-                        supplier=supplier, product=product, quantity=quantidade, movement_unit=unidade, unit_snapshot=product.unit,
-                        quantity_base=quantity_base, fsc_claim=_safe_str(declaracao), batch_code=_safe_str(lote),
-                        notes=_safe_str(observacoes), created_by=user, status='submitted'
+                        participant=participant,
+                        movement_date=_normalize_date(data),
+                        document_number=_safe_str(documento),
+                        supplier=supplier,
+                        product=product,
+                        quantity=quantidade,
+                        movement_unit=unidade,
+                        unit_snapshot=product.unit,
+                        quantity_base=quantity_base,
+                        fsc_claim=_safe_str(declaracao),
+                        batch_code=_safe_str(lote),
+                        notes=_safe_str(observacoes),
+                        created_by=user,
+                        status='submitted',
                     )
                     sync_entry_lot(obj)
-                    summary['entries'] += 1
             except Exception as exc:
                 errors.append(f'Entradas linha {idx}: {exc}')
 
     if 'Saidas' in workbook.sheetnames:
         sheet = workbook['Saidas']
-        for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not row or not row[0]:
-                continue
-            data, documento, cliente_nome, produto_nome, quantidade, unidade, declaracao, lote, observacoes = (list(row) + [None] * 9)[:9]
+        for idx, row in _sheet_rows(sheet):
             try:
-                produto_nome = _safe_str(produto_nome)
-                product = Product.objects.get(name=produto_nome)
+                data = _first_present(row, 'data')
+                if not data:
+                    raise ValueError('Data não informada.')
+                documento = _first_present(row, 'documento')
+                cliente_nome = _first_present(row, 'cliente')
+                produto_nome = _first_present(row, 'produto')
+                quantidade = _first_present(row, 'quantidade')
+                unidade = _first_present(row, 'unidade')
+                declaracao = _first_present(row, 'declaracao_fsc')
+                lote = _first_present(row, 'lote')
+                observacoes = _first_present(row, 'observacoes')
+
+                product = _coerce_product(produto_nome)
                 customer_name = _safe_str(cliente_nome)
                 if not customer_name:
                     raise ValueError('Cliente não informado.')
-                customer, _ = Counterparty.objects.get_or_create(participant=participant, name=customer_name, defaults={'type': 'customer'})
+                customer = _get_or_create_counterparty(participant, customer_name, type_='customer')
                 quantidade = _decimal(quantidade)
                 unidade = _safe_str(unidade) or product.unit
                 quantity_base = convert_to_base(product, quantidade, unidade)
                 preview = {
-                    'linha': idx, 'data': data, 'documento': _safe_str(documento), 'customer': customer_name,
-                    'product': product.name, 'quantity': quantidade, 'unit': unidade, 'quantity_base': quantity_base,
+                    'linha': idx,
+                    'data': data,
+                    'documento': _safe_str(documento),
+                    'customer': customer_name,
+                    'product': product.name,
+                    'quantity': quantidade,
+                    'unit': unidade,
+                    'quantity_base': quantity_base,
                 }
                 previews['sales'].append(preview)
+                summary['sales'] += 1
                 if persist:
                     obj = SaleRecord.objects.create(
-                        participant=participant, movement_date=_normalize_date(data), document_number=_safe_str(documento),
-                        customer=customer, product=product, quantity=quantidade, movement_unit=unidade, unit_snapshot=product.unit,
-                        quantity_base=quantity_base, fsc_claim=_safe_str(declaracao), batch_code=_safe_str(lote),
-                        notes=_safe_str(observacoes), created_by=user, status='submitted'
+                        participant=participant,
+                        movement_date=_normalize_date(data),
+                        document_number=_safe_str(documento),
+                        customer=customer,
+                        product=product,
+                        quantity=quantidade,
+                        movement_unit=unidade,
+                        unit_snapshot=product.unit,
+                        quantity_base=quantity_base,
+                        fsc_claim=_safe_str(declaracao),
+                        batch_code=_safe_str(lote),
+                        notes=_safe_str(observacoes),
+                        created_by=user,
+                        status='submitted',
                     )
                     reallocate_sale(obj)
-                    summary['sales'] += 1
             except Exception as exc:
                 errors.append(f'Saidas linha {idx}: {exc}')
 
     if 'Transformacoes' in workbook.sheetnames:
         sheet = workbook['Transformacoes']
-        for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not row or not row[0]:
-                continue
-            data, documento, cliente_nome, produto_origem, quantidade_origem, unidade_origem, produto_destino, observacoes = (list(row) + [None] * 8)[:8]
+        for idx, row in _sheet_rows(sheet):
             try:
-                source_product = Product.objects.get(name=_safe_str(produto_origem))
-                target_product = Product.objects.get(name=_safe_str(produto_destino))
-                source_quantity = _decimal(quantidade_origem)
-                unidade_origem = _safe_str(unidade_origem) or source_product.unit
-                source_quantity_base = convert_to_base(source_product, source_quantity, unidade_origem)
-                target_quantity_base = calculate_target_from_source(source_product, target_product, source_quantity_base, participant=participant)
+                data = _first_present(row, 'data')
+                if not data:
+                    raise ValueError('Data não informada.')
+                documento = _first_present(row, 'documento')
+                cliente_nome = _first_present(row, 'cliente', 'cliente_final')
+                produto_origem = _first_present(row, 'produto_origem')
+                produto_destino = _first_present(row, 'produto_destino')
+                target_quantity = _first_present(row, 'quantidade_produzida', 'quantidade_destino', 'quantidade_producao')
+                target_unit = _first_present(row, 'unidade_destino', 'unidade_produzida', 'unidade')
+                observacoes = _first_present(row, 'observacoes')
+
+                source_product = _coerce_product(produto_origem)
+                target_product = _coerce_product(produto_destino)
+                if source_product.id == target_product.id:
+                    raise ValueError('Produto de origem e produto de destino não podem ser iguais.')
+
                 rule = get_transformation_rule(source_product, target_product, participant=participant)
+                if not rule:
+                    raise ValueError('Não existe regra de transformação cadastrada para os produtos selecionados para esta empresa.')
+
+                target_quantity = _decimal(target_quantity)
+                target_unit = _safe_str(target_unit) or target_product.unit
+                target_quantity_base = convert_to_base(target_product, target_quantity, target_unit)
+                if not rule.yield_factor:
+                    raise ValueError('A regra de transformação está com fator de rendimento inválido.')
+                source_quantity_base = (target_quantity_base / Decimal(str(rule.yield_factor))).quantize(Decimal('0.001'))
+
                 preview = {
-                    'linha': idx, 'data': data, 'document_number': _safe_str(documento), 'customer': _safe_str(cliente_nome), 'source_product': source_product.name, 'source_quantity': source_quantity,
-                    'source_unit': unidade_origem, 'target_product': target_product.name,
-                    'target_quantity_base': target_quantity_base, 'yield_factor': rule.yield_factor,
+                    'linha': idx,
+                    'data': data,
+                    'document_number': _safe_str(documento),
+                    'customer': _safe_str(cliente_nome),
+                    'source_product': source_product.name,
+                    'source_quantity_base': source_quantity_base,
+                    'source_unit': source_product.unit,
+                    'target_product': target_product.name,
+                    'target_quantity': target_quantity,
+                    'target_unit': target_unit,
+                    'target_quantity_base': target_quantity_base,
+                    'yield_factor': rule.yield_factor,
                 }
                 previews['transformations'].append(preview)
+                summary['transformations'] += 1
                 if persist:
-                    customer = None
-                    customer_name = _safe_str(cliente_nome)
-                    if customer_name:
-                        customer, _ = Counterparty.objects.get_or_create(participant=participant, name=customer_name, defaults={'type': 'customer'})
+                    customer = _get_or_create_counterparty(participant, cliente_nome, type_='customer') if _safe_str(cliente_nome) else None
                     obj = TransformationRecord.objects.create(
-                        participant=participant, movement_date=_normalize_date(data), document_number=_safe_str(documento), customer=customer, source_product=source_product,
-                        source_quantity=source_quantity, source_unit=unidade_origem, source_quantity_base=source_quantity_base,
-                        target_product=target_product, target_quantity_base=target_quantity_base,
-                        target_unit_snapshot=target_product.unit, yield_factor_snapshot=rule.yield_factor,
-                        notes=_safe_str(observacoes), created_by=user
+                        participant=participant,
+                        movement_date=_normalize_date(data),
+                        document_number=_safe_str(documento),
+                        customer=customer,
+                        source_product=source_product,
+                        source_quantity=source_quantity_base,
+                        source_unit=source_product.unit,
+                        source_quantity_base=source_quantity_base,
+                        target_product=target_product,
+                        target_quantity_base=target_quantity_base,
+                        target_unit_snapshot=target_product.unit,
+                        yield_factor_snapshot=rule.yield_factor,
+                        notes=_safe_str(observacoes),
+                        created_by=user,
                     )
                     reallocate_transformation_sources(obj)
                     sync_transformation_target_lot(obj)
-                    summary['transformations'] += 1
             except Exception as exc:
                 errors.append(f'Transformacoes linha {idx}: {exc}')
 
@@ -281,8 +413,8 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
         ws2.append(['data', 'documento', 'cliente', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'observacoes'])
         ws2.append(['2026-03-18', 'NF-SAI-001', 'Cliente Exemplo', 'Madeira Serrada 100%', 2, 'm3', 'FSC 100%', 'L001', 'Exemplo'])
         ws3 = wb.create_sheet('Transformacoes')
-        ws3.append(['data', 'produto_origem', 'quantidade_origem', 'unidade_origem', 'produto_destino', 'observacoes'])
-        ws3.append(['2026-03-18', 'Toras e Toretes 100%', 10, 'm3', 'Madeira Serrada 100%', 'Exemplo'])
+        ws3.append(['data', 'documento', 'cliente_final', 'produto_origem', 'produto_destino', 'quantidade_produzida', 'unidade_destino', 'observacoes'])
+        ws3.append(['2026-03-18', 'TRF-001', 'Cliente Exemplo', 'Toras e Toretes 100%', 'Madeira Serrada 100%', 5, 'm3', 'Informe a produção final; o sistema calcula automaticamente o consumo da origem.'])
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename=modelo_importacao_fsc.xlsx'
         wb.save(response)
@@ -331,7 +463,8 @@ class ImportWorkbookView(LoginRequiredMixin, View):
 
         # import action
         workbook = openpyxl.load_workbook(form.cleaned_data['workbook'])
-        summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=True)
+        with transaction.atomic():
+            summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=True)
         if errors:
             messages.error(request, 'A importação encontrou inconsistências e não foi concluída por completo. Revise a planilha.')
             return self._render(request, form, preview=preview, errors=errors, summary=summary)
