@@ -270,7 +270,7 @@ input[type='checkbox'] { width: auto; }
             <a class="sidebar-link {% if request.path == '/' %}is-active{% endif %}" href="/"><span class="sidebar-icon">🏠</span><span class="sidebar-link-text">Dashboard</span></a>
           </nav>
         </div>
-        {% if user.is_participant_user %}
+        {% if user.is_participant_user or user.is_manager %}
         <div class="sidebar-section">
           <div class="sidebar-label">Operação</div>
           <nav class="sidebar-nav">
