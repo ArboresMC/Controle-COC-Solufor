@@ -1,8 +1,9 @@
 from datetime import date
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.db import transaction
-from django.db.models import Sum
+from django.db import models, transaction
+from django.db.models import Count, Sum
+from django.core.paginator import Paginator
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView
@@ -13,59 +14,92 @@ from .forms import EntryRecordForm, SaleRecordForm, TransformationRecordForm
 from .models import EntryRecord, SaleRecord, TransformationRecord
 from .services import convert_to_base, get_available_balance, get_balance_items, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot
 
+
+class PaginationMixin:
+    paginate_by = 50
+
+
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
         return self.request.user.is_manager
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'dashboard.html'
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         today = date.today()
         current_org = getattr(user, 'current_organization', None)
-        month_entries = EntryRecord.objects.select_related('participant', 'product')
-        month_sales = SaleRecord.objects.select_related('participant', 'product')
-        transformations = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
+
+        month_entries = EntryRecord.objects.all()
+        month_sales = SaleRecord.objects.all()
+        month_transformations = TransformationRecord.objects.all()
         closings = MonthlyClosing.objects.select_related('participant').filter(year=today.year, month=today.month)
+
         if user.is_manager or user.is_auditor:
             if current_org:
                 month_entries = month_entries.filter(participant__organization=current_org)
                 month_sales = month_sales.filter(participant__organization=current_org)
-                transformations = transformations.filter(participant__organization=current_org)
+                month_transformations = month_transformations.filter(participant__organization=current_org)
                 closings = closings.filter(participant__organization=current_org)
             else:
-                month_entries = EntryRecord.objects.none(); month_sales = SaleRecord.objects.none(); transformations = TransformationRecord.objects.none(); closings = MonthlyClosing.objects.none()
+                month_entries = EntryRecord.objects.none()
+                month_sales = SaleRecord.objects.none()
+                month_transformations = TransformationRecord.objects.none()
+                closings = MonthlyClosing.objects.none()
         elif getattr(user, 'participant', None):
             month_entries = month_entries.filter(participant=user.participant)
             month_sales = month_sales.filter(participant=user.participant)
-            transformations = transformations.filter(participant=user.participant)
+            month_transformations = month_transformations.filter(participant=user.participant)
             closings = closings.filter(participant=user.participant)
         else:
-            month_entries = EntryRecord.objects.none(); month_sales = SaleRecord.objects.none(); transformations = TransformationRecord.objects.none(); closings = MonthlyClosing.objects.none()
+            month_entries = EntryRecord.objects.none()
+            month_sales = SaleRecord.objects.none()
+            month_transformations = TransformationRecord.objects.none()
+            closings = MonthlyClosing.objects.none()
+
         month_entries = month_entries.filter(movement_date__year=today.year, movement_date__month=today.month)
         month_sales = month_sales.filter(movement_date__year=today.year, movement_date__month=today.month)
-        transformations = transformations.filter(movement_date__year=today.year, movement_date__month=today.month)
+        month_transformations = month_transformations.filter(movement_date__year=today.year, movement_date__month=today.month)
+
+        entry_summary = month_entries.aggregate(total=Sum('quantity_base'), needs=Count('id', filter=models.Q(status='needs_correction')))
+        sale_summary = month_sales.aggregate(total=Sum('quantity_base'), needs=Count('id', filter=models.Q(status='needs_correction')))
+
         ctx['entries_count'] = month_entries.count()
         ctx['sales_count'] = month_sales.count()
-        ctx['transformations_count'] = transformations.count()
-        ctx['entries_total'] = month_entries.aggregate(total=Sum('quantity_base'))['total'] or 0
-        ctx['sales_total'] = month_sales.aggregate(total=Sum('quantity_base'))['total'] or 0
-        ctx['needs_correction'] = month_entries.filter(status='needs_correction').count() + month_sales.filter(status='needs_correction').count()
+        ctx['transformations_count'] = month_transformations.count()
+        ctx['entries_total'] = entry_summary['total'] or 0
+        ctx['sales_total'] = sale_summary['total'] or 0
+        ctx['needs_correction'] = (entry_summary['needs'] or 0) + (sale_summary['needs'] or 0)
         ctx['current_closings'] = closings
-        ctx['recent_entries'] = month_entries[:5]
-        ctx['recent_sales'] = month_sales[:5]
-        ctx['recent_transformations'] = transformations[:5]
+        ctx['recent_entries'] = month_entries.select_related('participant', 'product')[:5]
+        ctx['recent_sales'] = month_sales.select_related('participant', 'product')[:5]
+        ctx['recent_transformations'] = month_transformations.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')[:5]
+
         if user.is_manager:
             active_participants = Participant.objects.filter(status='active')
             active_participants = active_participants.filter(organization=current_org) if current_org else Participant.objects.none()
-            participant_summaries = [get_participant_balance_summary(p) for p in active_participants.order_by('trade_name', 'legal_name')[:8]]
             closings_qs = MonthlyClosing.objects.filter(year=today.year, month=today.month)
             closings_qs = closings_qs.filter(participant__organization=current_org) if current_org else MonthlyClosing.objects.none()
-            ctx['manager_metrics'] = {'participants_active': active_participants.count(),'participants_without_closing': active_participants.exclude(id__in=closings_qs.values_list('participant_id', flat=True)).count(),'closings_submitted': closings_qs.filter(status='submitted').count(),'closings_rejected': closings_qs.filter(status='rejected').count(),'low_balance_participants': len([s for s in participant_summaries if s['low_count']]),}
+            participant_summaries = [
+                get_participant_balance_summary(participant)
+                for participant in active_participants.order_by('trade_name', 'legal_name')[:8]
+            ]
+            participants_without_closing = active_participants.exclude(
+                id__in=closings_qs.values_list('participant_id', flat=True)
+            )
+            ctx['manager_metrics'] = {
+                'participants_active': active_participants.count(),
+                'participants_without_closing': participants_without_closing.count(),
+                'closings_submitted': closings_qs.filter(status='submitted').count(),
+                'closings_rejected': closings_qs.filter(status='rejected').count(),
+                'low_balance_participants': len([s for s in participant_summaries if s['low_count']]),
+            }
             ctx['participant_summaries'] = participant_summaries
-            ctx['participants_without_closing'] = active_participants.exclude(id__in=closings_qs.values_list('participant_id', flat=True))[:10]
-            ctx['balance_items'] = []; ctx['projected_balance_items'] = []
+            ctx['participants_without_closing'] = participants_without_closing[:10]
+            ctx['balance_items'] = []
+            ctx['projected_balance_items'] = []
             ctx['dashboard_alerts'] = get_manager_alerts(today=today, organization=current_org)
         else:
             participant = getattr(user, 'participant', None)
@@ -74,7 +108,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             ctx['dashboard_alerts'] = get_participant_alerts(participant, today=today) if participant else []
         return ctx
 
-class ParticipantScopedMixin(LoginRequiredMixin):
+class ParticipantScopedMixin(PaginationMixin, LoginRequiredMixin):
     def get_queryset(self):
         qs = self.model.objects.select_related('participant', 'product')
         user = self.request.user
@@ -85,6 +119,7 @@ class ParticipantScopedMixin(LoginRequiredMixin):
         return qs.none()
 
 class DocumentCenterView(LoginRequiredMixin, TemplateView):
+    DOCS_PER_SECTION = 25
     template_name = 'transactions/document_center.html'
 
     def _filter_docs(self, qs):
@@ -117,9 +152,13 @@ class DocumentCenterView(LoginRequiredMixin, TemplateView):
             sale_qs = SaleRecord.objects.none()
             transformation_qs = TransformationRecord.objects.none()
 
-        ctx['entry_docs'] = self._filter_docs(entry_qs).order_by('-movement_date', '-id')[:100]
-        ctx['sale_docs'] = self._filter_docs(sale_qs).order_by('-movement_date', '-id')[:100]
-        ctx['transformation_docs'] = self._filter_docs(transformation_qs).order_by('-movement_date', '-id')[:100]
+        entry_docs = Paginator(self._filter_docs(entry_qs).order_by('-movement_date', '-id'), self.DOCS_PER_SECTION).get_page(self.request.GET.get('entry_page'))
+        sale_docs = Paginator(self._filter_docs(sale_qs).order_by('-movement_date', '-id'), self.DOCS_PER_SECTION).get_page(self.request.GET.get('sale_page'))
+        transformation_docs = Paginator(self._filter_docs(transformation_qs).order_by('-movement_date', '-id'), self.DOCS_PER_SECTION).get_page(self.request.GET.get('transformation_page'))
+
+        ctx['entry_docs'] = entry_docs
+        ctx['sale_docs'] = sale_docs
+        ctx['transformation_docs'] = transformation_docs
         return ctx
 
 class EntryListView(ParticipantScopedMixin, ListView):
@@ -128,7 +167,7 @@ class EntryListView(ParticipantScopedMixin, ListView):
 class SaleListView(ParticipantScopedMixin, ListView):
     model = SaleRecord; template_name = 'transactions/sale_list.html'; context_object_name = 'records'
 
-class TransformationListView(LoginRequiredMixin, ListView):
+class TransformationListView(PaginationMixin, LoginRequiredMixin, ListView):
     model = TransformationRecord; template_name = 'transactions/transformation_list.html'; context_object_name = 'records'
     def get_queryset(self):
         qs = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
@@ -255,13 +294,13 @@ class TransformationUpdateView(TransformationCreateView, UpdateView):
             form.add_error('source_lot', str(exc)); return self.form_invalid(form)
         messages.success(self.request, 'Transformação atualizada com sucesso.'); return redirect(self.success_url)
 
-class ManagerReviewEntryListView(ManagerRequiredMixin, ListView):
+class ManagerReviewEntryListView(PaginationMixin, ManagerRequiredMixin, ListView):
     model = EntryRecord; template_name = 'transactions/review_list.html'; context_object_name = 'records'
     def get_queryset(self):
         org = getattr(self.request.user, 'current_organization', None)
         return EntryRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else EntryRecord.objects.none()
 
-class ManagerReviewSaleListView(ManagerRequiredMixin, ListView):
+class ManagerReviewSaleListView(PaginationMixin, ManagerRequiredMixin, ListView):
     model = SaleRecord; template_name = 'transactions/review_list.html'; context_object_name = 'records'
     def get_queryset(self):
         org = getattr(self.request.user, 'current_organization', None)

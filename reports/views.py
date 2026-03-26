@@ -11,6 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -388,17 +389,27 @@ class AuditPdfReportView(ManagerRequiredMixin, View):
 
 class TraceabilityReportView(ManagerRequiredMixin, View):
     template_name = 'reports/traceability_report.html'
+    paginate_by = 50
 
     def get(self, request, *args, **kwargs):
         participant_id = request.GET.get('participant')
-        participant = Participant.objects.filter(pk=participant_id).first() if participant_id else None
-        rows = build_traceability_rows(participant=participant)
-        entry_balances = get_entry_balance_rows(participant=participant)
+        org = getattr(request.user, 'current_organization', None)
+        participants = Participant.objects.filter(status='active')
+        if org:
+            participants = participants.filter(organization=org)
+        else:
+            participants = Participant.objects.none()
+
+        participant = participants.filter(pk=participant_id).first() if participant_id else None
+        rows_page = Paginator(build_traceability_rows(participant=participant), self.paginate_by).get_page(request.GET.get('trace_page'))
+        balances_page = Paginator(get_entry_balance_rows(participant=participant), self.paginate_by).get_page(request.GET.get('balance_page'))
+        participant_query = f'participant={participant.id}' if participant else ''
         return render(request, self.template_name, {
-            'rows': rows,
-            'entry_balances': entry_balances,
-            'participants': Participant.objects.filter(status='active'),
+            'rows': rows_page,
+            'entry_balances': balances_page,
+            'participants': participants,
             'selected_participant': participant,
+            'participant_query': participant_query,
         })
 
 

@@ -1,0 +1,29 @@
+Arquivos atualizados para melhorar desempenho após crescimento da base:
+
+1. Paginação adicionada em:
+- transactions/views.py
+- reports/views.py
+- templates/transactions/entry_list.html
+- templates/transactions/sale_list.html
+- templates/transactions/transformation_list.html
+- templates/transactions/review_list.html
+- templates/transactions/document_center.html
+- templates/reports/traceability_report.html
+- templates/includes/pagination.html
+
+2. Otimizações de query em:
+- transactions/services.py
+- transactions/views.py
+- reports/views.py
+
+3. Índices de banco adicionados em:
+- participants/models.py
+- transactions/models.py
+- participants/migrations/0004_participant_performance_indexes.py
+- transactions/migrations/0009_performance_indexes.py
+
+Após subir no projeto, rode:
+python manage.py migrate
+
+Observação:
+- O projeto foi empacotado sem .git, .venv, __pycache__ e db.sqlite3 para facilitar o upload.

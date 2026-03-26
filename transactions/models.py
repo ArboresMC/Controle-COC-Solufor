@@ -78,6 +78,14 @@ class BaseMovement(models.Model):
 class EntryRecord(BaseMovement):
     supplier = models.ForeignKey('catalog.Counterparty', on_delete=models.PROTECT, related_name='entries')
 
+    class Meta(BaseMovement.Meta):
+        indexes = [
+            models.Index(fields=['participant', 'movement_date'], name='entry_part_date_idx'),
+            models.Index(fields=['participant', 'status', 'movement_date'], name='entry_part_stat_dt_idx'),
+            models.Index(fields=['product', 'movement_date'], name='entry_prod_date_idx'),
+            models.Index(fields=['supplier', 'movement_date'], name='entry_supp_date_idx'),
+        ]
+
     def __str__(self):
         return f'Entrada {self.document_number}'
 
@@ -93,6 +101,15 @@ class SaleRecord(BaseMovement):
         related_name='sales_as_source_supplier',
         verbose_name='Fornecedor de origem',
     )
+
+    class Meta(BaseMovement.Meta):
+        indexes = [
+            models.Index(fields=['participant', 'movement_date'], name='sale_part_date_idx'),
+            models.Index(fields=['participant', 'status', 'movement_date'], name='sale_part_stat_dt_idx'),
+            models.Index(fields=['product', 'movement_date'], name='sale_prod_date_idx'),
+            models.Index(fields=['customer', 'movement_date'], name='sale_cust_date_idx'),
+            models.Index(fields=['supplier', 'movement_date'], name='sale_supp_date_idx'),
+        ]
 
     def __str__(self):
         return f'Saída {self.document_number}'
@@ -137,6 +154,13 @@ class TransformationRecord(models.Model):
         ordering = ['-movement_date', '-id']
         verbose_name = 'Transformação'
         verbose_name_plural = 'Transformações'
+        indexes = [
+            models.Index(fields=['participant', 'movement_date'], name='trf_part_date_idx'),
+            models.Index(fields=['source_product', 'movement_date'], name='trf_src_date_idx'),
+            models.Index(fields=['target_product', 'movement_date'], name='trf_tgt_date_idx'),
+            models.Index(fields=['customer', 'movement_date'], name='trf_cust_date_idx'),
+            models.Index(fields=['supplier', 'movement_date'], name='trf_supp_date_idx'),
+        ]
 
     def clean(self):
         if self.movement_date > timezone.localdate():
@@ -175,6 +199,11 @@ class TraceLot(models.Model):
         ordering = ['movement_date', 'id']
         verbose_name = 'Lote rastreável'
         verbose_name_plural = 'Lotes rastreáveis'
+        indexes = [
+            models.Index(fields=['participant', 'source_type', 'movement_date'], name='lot_part_src_dt_idx'),
+            models.Index(fields=['participant', 'product', 'movement_date'], name='lot_part_prod_dt_idx'),
+            models.Index(fields=['supplier', 'movement_date'], name='lot_supp_date_idx'),
+        ]
 
     def clean(self):
         if self.source_type == 'entry' and not self.entry_id:
@@ -213,6 +242,12 @@ class LotAllocation(models.Model):
         ordering = ['created_at', 'id']
         verbose_name = 'Alocação de lote'
         verbose_name_plural = 'Alocações de lotes'
+        indexes = [
+            models.Index(fields=['participant', 'target_type'], name='alloc_part_tgt_idx'),
+            models.Index(fields=['lot', 'target_type'], name='alloc_lot_tgt_idx'),
+            models.Index(fields=['sale'], name='alloc_sale_idx'),
+            models.Index(fields=['transformation'], name='alloc_trf_idx'),
+        ]
 
     def clean(self):
         if self.target_type == 'sale' and not self.sale_id:
