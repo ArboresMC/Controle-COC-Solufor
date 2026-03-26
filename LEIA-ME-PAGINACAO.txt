@@ -1,0 +1,24 @@
+PACOTE DE CORRECAO DE PAGINACAO
+
+Arquivos atualizados:
+- transactions/views.py
+- reports/views.py
+- templates/transactions/entry_list.html
+- templates/transactions/sale_list.html
+- templates/transactions/transformation_list.html
+- templates/transactions/review_list.html
+- templates/reports/traceability_report.html
+- templates/includes/pagination.html
+
+O que foi corrigido:
+- paginação restaurada nas listagens de entradas, saídas e transformações
+- paginação restaurada na fila de revisão
+- paginação adicionada ao relatório de rastreabilidade
+- ordenação padrão por data mais recente
+- componente visual único de paginação
+
+Importante:
+- não há migration nova
+- não precisa rodar makemigrations
+- não precisa rodar migrate
+- basta substituir os arquivos e fazer deploy

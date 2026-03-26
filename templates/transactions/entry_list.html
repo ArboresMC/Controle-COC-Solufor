@@ -72,5 +72,6 @@
     {% endfor %}
   </table></div>
   {% else %}<div class="empty-state">Nenhuma entrada cadastrada ainda.</div>{% endif %}
+{% with pagination_base='?page=' pagination_suffix='' %}{% include 'includes/pagination.html' %}{% endwith %}
 </div>
 {% endblock %}

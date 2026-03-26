@@ -84,6 +84,19 @@ class ParticipantScopedMixin(LoginRequiredMixin):
         if user.participant: return qs.filter(participant=user.participant)
         return qs.none()
 
+
+
+class PaginatedListView(ListView):
+    paginate_by = 50
+
+    def get_paginate_by(self, queryset):
+        try:
+            per_page = int(self.request.GET.get('per_page', self.paginate_by))
+        except (TypeError, ValueError):
+            per_page = self.paginate_by
+        return per_page if per_page in {25, 50, 100} else self.paginate_by
+
+
 class DocumentCenterView(LoginRequiredMixin, TemplateView):
     template_name = 'transactions/document_center.html'
 
@@ -122,20 +135,30 @@ class DocumentCenterView(LoginRequiredMixin, TemplateView):
         ctx['transformation_docs'] = self._filter_docs(transformation_qs).order_by('-movement_date', '-id')[:100]
         return ctx
 
-class EntryListView(ParticipantScopedMixin, ListView):
+class EntryListView(ParticipantScopedMixin, PaginatedListView):
     model = EntryRecord; template_name = 'transactions/entry_list.html'; context_object_name = 'records'
 
-class SaleListView(ParticipantScopedMixin, ListView):
+    def get_queryset(self):
+        return super().get_queryset().order_by('-movement_date', '-id')
+
+class SaleListView(ParticipantScopedMixin, PaginatedListView):
     model = SaleRecord; template_name = 'transactions/sale_list.html'; context_object_name = 'records'
 
-class TransformationListView(LoginRequiredMixin, ListView):
+    def get_queryset(self):
+        return super().get_queryset().order_by('-movement_date', '-id')
+
+class TransformationListView(LoginRequiredMixin, PaginatedListView):
     model = TransformationRecord; template_name = 'transactions/transformation_list.html'; context_object_name = 'records'
     def get_queryset(self):
         qs = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
         user = self.request.user; current_org = getattr(user, 'current_organization', None)
-        if user.is_manager or user.is_auditor: return qs.filter(participant__organization=current_org) if current_org else qs.none()
-        if user.participant: return qs.filter(participant=user.participant)
-        return qs.none()
+        if user.is_manager or user.is_auditor:
+            qs = qs.filter(participant__organization=current_org) if current_org else qs.none()
+        elif user.participant:
+            qs = qs.filter(participant=user.participant)
+        else:
+            qs = qs.none()
+        return qs.order_by('-movement_date', '-id')
 
 class EntryCreateView(LoginRequiredMixin, CreateView):
     model = EntryRecord; form_class = EntryRecordForm; template_name = 'transactions/form.html'; success_url = reverse_lazy('entry_list')
@@ -255,14 +278,16 @@ class TransformationUpdateView(TransformationCreateView, UpdateView):
             form.add_error('source_lot', str(exc)); return self.form_invalid(form)
         messages.success(self.request, 'Transformação atualizada com sucesso.'); return redirect(self.success_url)
 
-class ManagerReviewEntryListView(ManagerRequiredMixin, ListView):
+class ManagerReviewEntryListView(ManagerRequiredMixin, PaginatedListView):
     model = EntryRecord; template_name = 'transactions/review_list.html'; context_object_name = 'records'
     def get_queryset(self):
         org = getattr(self.request.user, 'current_organization', None)
-        return EntryRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else EntryRecord.objects.none()
+        qs = EntryRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else EntryRecord.objects.none()
+        return qs.order_by('-movement_date', '-id')
 
-class ManagerReviewSaleListView(ManagerRequiredMixin, ListView):
+class ManagerReviewSaleListView(ManagerRequiredMixin, PaginatedListView):
     model = SaleRecord; template_name = 'transactions/review_list.html'; context_object_name = 'records'
     def get_queryset(self):
         org = getattr(self.request.user, 'current_organization', None)
-        return SaleRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else SaleRecord.objects.none()
+        qs = SaleRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else SaleRecord.objects.none()
+        return qs.order_by('-movement_date', '-id')

@@ -1,15 +1,27 @@
-{% if page_obj and page_obj.paginator.num_pages > 1 %}
-<nav class="pagination-wrap" aria-label="Paginação" style="margin-top:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-  {% if page_obj.has_previous %}
-    <a class="btn secondary" href="?{% if extra_query %}{{ extra_query }}&amp;{% endif %}{{ page_param|default:'page' }}=1">Primeira</a>
-    <a class="btn secondary" href="?{% if extra_query %}{{ extra_query }}&amp;{% endif %}{{ page_param|default:'page' }}={{ page_obj.previous_page_number }}">Anterior</a>
-  {% endif %}
+{% if is_paginated %}
+<div class="pagination-bar">
+  <div class="pagination-summary">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} registro{{ page_obj.paginator.count|pluralize }}</div>
+  <div class="pagination-actions">
+    {% if page_obj.has_previous %}
+      <a class="page-link" href="{{ pagination_base }}1{{ pagination_suffix }}">« Primeira</a>
+      <a class="page-link" href="{{ pagination_base }}{{ page_obj.previous_page_number }}{{ pagination_suffix }}">‹ Anterior</a>
+    {% else %}
+      <span class="page-link disabled">« Primeira</span>
+      <span class="page-link disabled">‹ Anterior</span>
+    {% endif %}
 
-  <span class="badge neutral">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    <span class="page-link current">{{ page_obj.number }}</span>
 
-  {% if page_obj.has_next %}
-    <a class="btn secondary" href="?{% if extra_query %}{{ extra_query }}&amp;{% endif %}{{ page_param|default:'page' }}={{ page_obj.next_page_number }}">Próxima</a>
-    <a class="btn secondary" href="?{% if extra_query %}{{ extra_query }}&amp;{% endif %}{{ page_param|default:'page' }}={{ page_obj.paginator.num_pages }}">Última</a>
-  {% endif %}
-</nav>
+    {% if page_obj.has_next %}
+      <a class="page-link" href="{{ pagination_base }}{{ page_obj.next_page_number }}{{ pagination_suffix }}">Próxima ›</a>
+      <a class="page-link" href="{{ pagination_base }}{{ page_obj.paginator.num_pages }}{{ pagination_suffix }}">Última »</a>
+    {% else %}
+      <span class="page-link disabled">Próxima ›</span>
+      <span class="page-link disabled">Última »</span>
+    {% endif %}
+  </div>
+</div>
+<style>
+.pagination-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid #e5edf1}.pagination-summary{color:#5f7783;font-weight:600}.pagination-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.page-link{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 14px;border-radius:999px;border:1px solid rgba(12,117,152,.18);background:#fff;color:#0b6280;text-decoration:none;font-weight:700;box-shadow:0 8px 18px rgba(8,72,95,.08)}.page-link:hover{text-decoration:none;transform:translateY(-1px)}.page-link.current{background:linear-gradient(135deg,#0b7fa3 0%,#0a6b8a 100%);border-color:#0b7fa3;color:#fff}.page-link.disabled{opacity:.45;pointer-events:none;background:#f7fafb;color:#7a919c;box-shadow:none}@media (max-width:768px){.pagination-bar{align-items:flex-start}.pagination-actions{width:100%}}
+</style>
 {% endif %}
