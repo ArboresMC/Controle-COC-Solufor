@@ -1,0 +1,44 @@
+IMPORTAÇÃO ASSÍNCRONA SEM CUSTO EXTRA
+=====================================
+
+O que foi implementado
+----------------------
+- Fila interna de importação usando o próprio banco de dados.
+- Worker simples via management command: python manage.py process_import_jobs
+- Tela de importação com status em tempo real por polling.
+- Validação continua síncrona; importação pesada roda em fila.
+
+Arquivos principais adicionados/alterados
+-----------------------------------------
+- reports/models.py
+- reports/views.py
+- reports/urls.py
+- reports/migrations/0001_importjob.py
+- reports/management/commands/process_import_jobs.py
+- templates/reports/import_workbook.html
+- start.sh
+- Procfile
+- build.sh
+
+IMPORTANTE NO RENDER
+--------------------
+Para a fila funcionar no mesmo serviço web, sem custo extra, ajuste os comandos do Render assim:
+
+Build Command:
+pip install -r requirements.txt && python manage.py collectstatic --noinput
+
+Start Command:
+bash start.sh
+
+Se preferir sem start.sh, use diretamente:
+python manage.py migrate --noinput && (python manage.py process_import_jobs --sleep 3 &) && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --workers 2 --threads 4
+
+Após subir o código, rode migrate localmente também se desejar testar:
+python manage.py migrate
+
+Observações
+-----------
+- Não usa Redis, Celery, worker pago ou serviço adicional.
+- Em plano free continua sujeito aos limites do Render.
+- Se o serviço reiniciar, jobs pendentes continuam na fila.
+- Jobs travados por queda do serviço são recolocados automaticamente na fila.

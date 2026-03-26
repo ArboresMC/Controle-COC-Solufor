@@ -21,7 +21,7 @@
 
   <div class="doc-grid">
     <div class="card soft">
-      <div class="card-header"><div><h3 class="doc-section-title">Entradas</h3><span class="doc-chip">{{ entry_docs.paginator.count }} documento{{ entry_docs.paginator.count|pluralize }}</span></div></div>
+      <div class="card-header"><div><h3 class="doc-section-title">Entradas</h3><span class="doc-chip">{{ entry_docs|length }} documento{{ entry_docs|length|pluralize }}</span></div></div>
       {% if entry_docs %}
       <div class="table-wrap"><table>
         <tr><th>Data</th><th>Documento</th><th>Produto</th><th>Fornecedor</th><th>Abrir</th></tr>
@@ -29,12 +29,11 @@
         <tr><td>{{ r.movement_date|date:"d/m/Y" }}</td><td>{{ r.document_number|default:'—' }}</td><td><strong>{{ r.product }}</strong></td><td>{{ r.supplier|default:'—' }}</td><td><a class="doc-action" href="{{ r.attachment.url }}" target="_blank" rel="noopener noreferrer" title="Abrir documento"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9l-4-6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v6h4" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 14h6M9 17h6M9 11h2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>PDF</span></a></td></tr>
         {% endfor %}
       </table></div>
-      {% include "includes/pagination.html" with page_obj=entry_docs page_param="entry_page" extra_query="" %}
       {% else %}<div class="empty-state">Nenhum PDF anexado em entradas.</div>{% endif %}
     </div>
 
     <div class="card soft">
-      <div class="card-header"><div><h3 class="doc-section-title">Saídas</h3><span class="doc-chip">{{ sale_docs.paginator.count }} documento{{ sale_docs.paginator.count|pluralize }}</span></div></div>
+      <div class="card-header"><div><h3 class="doc-section-title">Saídas</h3><span class="doc-chip">{{ sale_docs|length }} documento{{ sale_docs|length|pluralize }}</span></div></div>
       {% if sale_docs %}
       <div class="table-wrap"><table>
         <tr><th>Data</th><th>Documento</th><th>Produto</th><th>Cliente</th><th>Abrir</th></tr>
@@ -42,12 +41,11 @@
         <tr><td>{{ r.movement_date|date:"d/m/Y" }}</td><td>{{ r.document_number|default:'—' }}</td><td><strong>{{ r.product }}</strong></td><td>{{ r.customer|default:'—' }}</td><td><a class="doc-action" href="{{ r.attachment.url }}" target="_blank" rel="noopener noreferrer" title="Abrir documento"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9l-4-6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v6h4" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 14h6M9 17h6M9 11h2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>PDF</span></a></td></tr>
         {% endfor %}
       </table></div>
-      {% include "includes/pagination.html" with page_obj=sale_docs page_param="sale_page" extra_query="" %}
       {% else %}<div class="empty-state">Nenhum PDF anexado em saídas.</div>{% endif %}
     </div>
 
     <div class="card soft">
-      <div class="card-header"><div><h3 class="doc-section-title">Transformações</h3><span class="doc-chip">{{ transformation_docs.paginator.count }} documento{{ transformation_docs.paginator.count|pluralize }}</span></div></div>
+      <div class="card-header"><div><h3 class="doc-section-title">Transformações</h3><span class="doc-chip">{{ transformation_docs|length }} documento{{ transformation_docs|length|pluralize }}</span></div></div>
       {% if transformation_docs %}
       <div class="table-wrap"><table>
         <tr><th>Data</th><th>Documento</th><th>Origem</th><th>Destino</th><th>Abrir</th></tr>
@@ -55,7 +53,6 @@
         <tr><td>{{ r.movement_date|date:"d/m/Y" }}</td><td>{{ r.document_number|default:'—' }}</td><td><strong>{{ r.source_product }}</strong></td><td><strong>{{ r.target_product }}</strong></td><td><a class="doc-action" href="{{ r.attachment.url }}" target="_blank" rel="noopener noreferrer" title="Abrir documento"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9l-4-6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v6h4" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 14h6M9 17h6M9 11h2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>PDF</span></a></td></tr>
         {% endfor %}
       </table></div>
-      {% include "includes/pagination.html" with page_obj=transformation_docs page_param="transformation_page" extra_query="" %}
       {% else %}<div class="empty-state">Nenhum PDF anexado em transformações.</div>{% endif %}
     </div>
   </div>

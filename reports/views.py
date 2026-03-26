@@ -1,8 +1,10 @@
 from decimal import Decimal
 from unicodedata import normalize
 
+from django.core.files.base import File
 from django.db import transaction
 from io import BytesIO
+from pathlib import Path
 
 import openpyxl
 from reportlab.lib import colors
@@ -11,11 +13,11 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from django.contrib import messages
-from django.core.paginator import Paginator
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.http import HttpResponse
-from django.shortcuts import redirect, render
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_GET
 from django.views import View
 
 from catalog.models import Counterparty, Product
@@ -33,6 +35,7 @@ from transactions.services import (
     sync_transformation_target_lot,
 )
 from .forms import ImportWorkbookForm
+from .models import ImportJob
 
 
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
@@ -103,10 +106,20 @@ def _get_or_create_counterparty(participant, name, *, type_):
     )[0]
 
 
-def _build_import_preview(workbook, participant, user, persist=False):
+def _build_import_preview(workbook, participant, user, persist=False, progress_callback=None):
     summary = {'entries': 0, 'sales': 0, 'transformations': 0}
     errors = []
     previews = {'entries': [], 'sales': [], 'transformations': []}
+
+    total_rows = 0
+    for sheet_name in ('Entradas', 'Saidas', 'Transformacoes'):
+        if sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            total_rows += sum(1 for _idx, _row in _sheet_rows(sheet))
+    processed_rows = 0
+
+    if progress_callback:
+        progress_callback(processed_rows, total_rows)
 
     if 'Entradas' in workbook.sheetnames:
         sheet = workbook['Entradas']
@@ -162,6 +175,10 @@ def _build_import_preview(workbook, participant, user, persist=False):
                     sync_entry_lot(obj)
             except Exception as exc:
                 errors.append(f'Entradas linha {idx}: {exc}')
+            finally:
+                processed_rows += 1
+                if progress_callback:
+                    progress_callback(processed_rows, total_rows)
 
     if 'Saidas' in workbook.sheetnames:
         sheet = workbook['Saidas']
@@ -219,6 +236,10 @@ def _build_import_preview(workbook, participant, user, persist=False):
                     reallocate_sale(obj)
             except Exception as exc:
                 errors.append(f'Saidas linha {idx}: {exc}')
+            finally:
+                processed_rows += 1
+                if progress_callback:
+                    progress_callback(processed_rows, total_rows)
 
     if 'Transformacoes' in workbook.sheetnames:
         sheet = workbook['Transformacoes']
@@ -289,6 +310,10 @@ def _build_import_preview(workbook, participant, user, persist=False):
                     sync_transformation_target_lot(obj)
             except Exception as exc:
                 errors.append(f'Transformacoes linha {idx}: {exc}')
+            finally:
+                processed_rows += 1
+                if progress_callback:
+                    progress_callback(processed_rows, total_rows)
 
     return summary, errors, previews
 
@@ -389,28 +414,108 @@ class AuditPdfReportView(ManagerRequiredMixin, View):
 
 class TraceabilityReportView(ManagerRequiredMixin, View):
     template_name = 'reports/traceability_report.html'
-    paginate_by = 50
 
     def get(self, request, *args, **kwargs):
         participant_id = request.GET.get('participant')
-        org = getattr(request.user, 'current_organization', None)
-        participants = Participant.objects.filter(status='active')
-        if org:
-            participants = participants.filter(organization=org)
-        else:
-            participants = Participant.objects.none()
-
-        participant = participants.filter(pk=participant_id).first() if participant_id else None
-        rows_page = Paginator(build_traceability_rows(participant=participant), self.paginate_by).get_page(request.GET.get('trace_page'))
-        balances_page = Paginator(get_entry_balance_rows(participant=participant), self.paginate_by).get_page(request.GET.get('balance_page'))
-        participant_query = f'participant={participant.id}' if participant else ''
+        participant = Participant.objects.filter(pk=participant_id).first() if participant_id else None
+        rows = build_traceability_rows(participant=participant)
+        entry_balances = get_entry_balance_rows(participant=participant)
         return render(request, self.template_name, {
-            'rows': rows_page,
-            'entry_balances': balances_page,
-            'participants': participants,
+            'rows': rows,
+            'entry_balances': entry_balances,
+            'participants': Participant.objects.filter(status='active'),
             'selected_participant': participant,
-            'participant_query': participant_query,
         })
+
+
+def _serialize_preview(preview):
+    def _serialize_row(row):
+        payload = {}
+        for key, value in row.items():
+            if hasattr(value, 'isoformat'):
+                payload[key] = value.isoformat()
+            else:
+                payload[key] = str(value) if isinstance(value, Decimal) else value
+        return payload
+
+    return {
+        'entries': [_serialize_row(row) for row in preview.get('entries', [])[:100]],
+        'sales': [_serialize_row(row) for row in preview.get('sales', [])[:100]],
+        'transformations': [_serialize_row(row) for row in preview.get('transformations', [])[:100]],
+    }
+
+
+def process_import_job(job):
+    def _heartbeat(current, total):
+        ImportJob.objects.filter(pk=job.pk).update(
+            progress_current=current,
+            progress_total=total,
+            last_heartbeat=timezone.now(),
+        )
+
+    now = timezone.now()
+    ImportJob.objects.filter(pk=job.pk).update(
+        status=ImportJob.STATUS_PROCESSING,
+        started_at=now,
+        last_heartbeat=now,
+        error_messages=[],
+    )
+
+    try:
+        with job.workbook.open('rb') as fh:
+            workbook = openpyxl.load_workbook(fh)
+            with transaction.atomic():
+                summary, errors, preview = _build_import_preview(
+                    workbook,
+                    job.participant,
+                    job.created_by,
+                    persist=True,
+                    progress_callback=_heartbeat,
+                )
+
+        status = ImportJob.STATUS_COMPLETED if not errors else ImportJob.STATUS_FAILED
+        refreshed = ImportJob.objects.get(pk=job.pk)
+        ImportJob.objects.filter(pk=job.pk).update(
+            status=status,
+            summary=summary,
+            error_messages=errors,
+            preview=_serialize_preview(preview),
+            finished_at=timezone.now(),
+            last_heartbeat=timezone.now(),
+            progress_current=refreshed.progress_total or refreshed.progress_current,
+        )
+    except Exception as exc:
+        ImportJob.objects.filter(pk=job.pk).update(
+            status=ImportJob.STATUS_FAILED,
+            error_messages=[str(exc)],
+            finished_at=timezone.now(),
+            last_heartbeat=timezone.now(),
+        )
+        raise
+
+
+@require_GET
+def import_job_status(request, job_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Autenticação necessária.'}, status=403)
+
+    job = get_object_or_404(ImportJob.objects.select_related('participant', 'created_by'), pk=job_id)
+    if (not request.user.is_manager) and job.created_by_id != request.user.id:
+        return JsonResponse({'detail': 'Acesso negado.'}, status=403)
+
+    return JsonResponse({
+        'id': job.id,
+        'status': job.status,
+        'status_label': job.get_status_display(),
+        'summary': job.summary or {},
+        'errors': job.error_messages or [],
+        'progress_current': job.progress_current,
+        'progress_total': job.progress_total,
+        'started_at': job.started_at.isoformat() if job.started_at else None,
+        'finished_at': job.finished_at.isoformat() if job.finished_at else None,
+        'participant': str(job.participant),
+        'original_filename': job.original_filename,
+    })
 
 
 class ImportTemplateDownloadView(LoginRequiredMixin, View):
@@ -435,19 +540,21 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
 class ImportWorkbookView(LoginRequiredMixin, View):
     template_name = 'reports/import_workbook.html'
 
-    def _render(self, request, form, preview=None, errors=None, summary=None):
+    def _render(self, request, form, preview=None, errors=None, summary=None, import_job=None):
         return render(request, self.template_name, {
             'form': form,
             'preview': preview or {},
             'preview_errors': errors or [],
             'summary': summary or {},
+            'import_job': import_job,
         })
 
     def get(self, request, *args, **kwargs):
         form = ImportWorkbookForm(initial={'action': 'validate'})
         if not request.user.is_manager:
             form.fields.pop('participant', None)
-        return self._render(request, form)
+        import_job = ImportJob.objects.filter(created_by=request.user).order_by('-created_at').first()
+        return self._render(request, form, import_job=import_job)
 
     def post(self, request, *args, **kwargs):
         form = ImportWorkbookForm(request.POST, request.FILES)
@@ -462,23 +569,35 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             return self._render(request, form)
 
         action = request.POST.get('action') or 'validate'
-        workbook = openpyxl.load_workbook(form.cleaned_data['workbook'])
-        summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=False)
+        workbook_file = form.cleaned_data['workbook']
 
-        if action == 'validate' or errors:
+        if action == 'validate':
+            workbook = openpyxl.load_workbook(workbook_file)
+            summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=False)
             if errors:
                 messages.warning(request, f'Validação concluída com {len(errors)} inconsistências. Corrija a planilha antes de importar.')
             else:
                 messages.success(request, 'Validação concluída sem inconsistências. A planilha está pronta para importação.')
             return self._render(request, form, preview=preview, errors=errors, summary=summary)
 
-        # import action
-        workbook = openpyxl.load_workbook(form.cleaned_data['workbook'])
-        with transaction.atomic():
-            summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=True)
+        workbook = openpyxl.load_workbook(workbook_file)
+        summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=False)
         if errors:
-            messages.error(request, 'A importação encontrou inconsistências e não foi concluída por completo. Revise a planilha.')
+            messages.error(request, 'A importação não foi enfileirada porque a validação encontrou inconsistências. Corrija a planilha e tente novamente.')
             return self._render(request, form, preview=preview, errors=errors, summary=summary)
 
-        messages.success(request, f"Importação concluída. Entradas: {summary['entries']}, saídas: {summary['sales']}, transformações: {summary['transformations']}.")
-        return redirect('dashboard')
+        workbook_file.seek(0)
+        import_job = ImportJob.objects.create(
+            participant=participant,
+            created_by=request.user,
+            original_filename=Path(workbook_file.name).name,
+            summary=summary,
+            preview=_serialize_preview(preview),
+        )
+        import_job.workbook.save(Path(workbook_file.name).name, File(workbook_file), save=True)
+
+        messages.success(request, 'Importação enviada para a fila interna. Você pode acompanhar o progresso nesta tela sem travar o sistema.')
+        fresh_form = ImportWorkbookForm(initial={'action': 'validate'})
+        if not request.user.is_manager:
+            fresh_form.fields.pop('participant', None)
+        return self._render(request, fresh_form, import_job=import_job)

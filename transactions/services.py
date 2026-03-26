@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 from django.db import transaction, models
-from django.db.models import Prefetch, Sum
+from django.db.models import Sum
 from catalog.models import ProductUnitConversion, ProductTransformationRule, Product
 from .models import TraceLot, LotAllocation
 
@@ -254,17 +254,8 @@ def describe_lot_origins(lot):
     if lot.entry_id:
         supplier = str(lot.supplier) if lot.supplier_id else 'Sem fornecedor'
         return supplier, lot.label
-    cached_entries = getattr(lot, '_origin_entries_cache', None)
-    if cached_entries is not None:
-        if not cached_entries:
-            return 'Sem origem identificada', lot.label
-        suppliers = sorted({str(e.supplier) for e in cached_entries if getattr(e, 'supplier_id', None)})
-        supplier_label = ', '.join(suppliers) if suppliers else 'Sem fornecedor'
-        source_label = f'{lot.label} · origens: ' + ', '.join(sorted({e.document_number for e in cached_entries}))
-        return supplier_label, source_label
     entry_ids = _origin_entry_ids_for_lot(lot)
-    if not entry_ids:
-        return 'Sem origem identificada', lot.label
+    if not entry_ids: return 'Sem origem identificada', lot.label
     from .models import EntryRecord
     entries = EntryRecord.objects.select_related('supplier').filter(id__in=entry_ids)
     suppliers = sorted({str(e.supplier) for e in entries if e.supplier_id})
@@ -272,123 +263,29 @@ def describe_lot_origins(lot):
     source_label = f'{lot.label} · origens: ' + ', '.join(sorted({e.document_number for e in entries}))
     return supplier_label, source_label
 
-def _prime_lot_origin_cache(allocations):
-    transformed_lots = []
-    for allocation in allocations:
-        lot = allocation.lot
-        if lot.entry_id or not lot.transformation_id:
-            continue
-        transformed_lots.append(lot)
-
-    for lot in transformed_lots:
-        source_allocations = getattr(lot.transformation, 'source_lot_allocations', []).all() if hasattr(getattr(lot, 'transformation', None), 'source_lot_allocations') else []
-        origin_entries = []
-        for source_allocation in source_allocations:
-            source_lot = source_allocation.lot
-            if source_lot.entry_id and source_lot.entry is not None:
-                origin_entries.append(source_lot.entry)
-        lot._origin_entries_cache = origin_entries
-
-
 def build_traceability_rows(participant=None, product=None):
-    source_allocations_prefetch = Prefetch(
-        'lot__transformation__source_lot_allocations',
-        queryset=LotAllocation.objects.select_related('lot', 'lot__entry', 'lot__entry__supplier', 'lot__supplier'),
-    )
-    allocations = (
-        LotAllocation.objects
-        .select_related(
-            'participant', 'lot', 'lot__product', 'lot__supplier', 'lot__entry', 'lot__entry__supplier',
-            'lot__transformation', 'sale', 'sale__customer', 'sale__product', 'transformation',
-            'transformation__customer', 'transformation__target_product'
-        )
-        .prefetch_related(source_allocations_prefetch)
-        .order_by('lot__movement_date', 'lot__id', 'id')
-    )
-    if participant:
-        allocations = allocations.filter(participant=participant)
-    if product:
-        allocations = allocations.filter(lot__product=product)
-
-    allocations = list(allocations)
-    _prime_lot_origin_cache(allocations)
+    allocations = LotAllocation.objects.select_related('participant', 'lot', 'lot__product', 'lot__supplier', 'sale', 'sale__customer', 'transformation', 'transformation__target_product').order_by('lot__movement_date', 'lot__id', 'id')
+    if participant: allocations = allocations.filter(participant=participant)
+    if product: allocations = allocations.filter(lot__product=product)
     rows = []
     for allocation in allocations:
         supplier_label, source_label = describe_lot_origins(allocation.lot)
         if allocation.sale_id:
-            use_type = 'saída'
-            use_label = f'Saída {allocation.sale.document_number}'
-            counterparty = str(allocation.sale.customer)
-            destination_label = str(allocation.sale.product)
-            use_date = allocation.sale.movement_date
+            use_type = 'saída'; use_label = f'Saída {allocation.sale.document_number}'; counterparty = str(allocation.sale.customer); destination_label = str(allocation.sale.product); use_date = allocation.sale.movement_date
         else:
-            use_type = 'transformação/saída'
-            doc = allocation.transformation.document_number or f'Transformação #{allocation.transformation_id}'
-            use_label = doc
-            counterparty = str(allocation.transformation.customer) if allocation.transformation.customer_id else 'Processo interno'
-            destination_label = str(allocation.transformation.target_product)
-            use_date = allocation.transformation.movement_date
-        rows.append({
-            'participant': allocation.participant,
-            'product': allocation.lot.product,
-            'use_type': use_type,
-            'use_label': use_label,
-            'use_date': use_date,
-            'source_label': source_label,
-            'source_date': allocation.lot.movement_date,
-            'quantity': allocation.quantity_base.quantize(Decimal('0.001')),
-            'unit': allocation.lot.product.get_unit_display(),
-            'supplier': supplier_label,
-            'counterparty': counterparty,
-            'destination_label': destination_label,
-        })
+            use_type = 'transformação/saída'; doc = allocation.transformation.document_number or f'Transformação #{allocation.transformation_id}'; use_label = doc; counterparty = str(allocation.transformation.customer) if allocation.transformation.customer_id else 'Processo interno'; destination_label = str(allocation.transformation.target_product); use_date = allocation.transformation.movement_date
+        rows.append({'participant': allocation.participant,'product': allocation.lot.product,'use_type': use_type,'use_label': use_label,'use_date': use_date,'source_label': source_label,'source_date': allocation.lot.movement_date,'quantity': allocation.quantity_base.quantize(Decimal('0.001')),'unit': allocation.lot.product.get_unit_display(),'supplier': supplier_label,'counterparty': counterparty,'destination_label': destination_label})
     return rows
 
 def get_entry_balance_rows(participant=None):
-    sale_allocations_prefetch = Prefetch(
-        'allocations',
-        queryset=LotAllocation.objects.select_related('sale__customer').filter(target_type='sale'),
-        to_attr='sale_allocations_prefetched',
-    )
-    transformation_allocations_prefetch = Prefetch(
-        'allocations',
-        queryset=LotAllocation.objects.filter(target_type='transformation'),
-        to_attr='transformation_allocations_prefetched',
-    )
-    lots = (
-        TraceLot.objects
-        .select_related('participant', 'product', 'supplier', 'entry')
-        .prefetch_related(sale_allocations_prefetch, transformation_allocations_prefetch)
-        .filter(source_type='entry')
-        .order_by('movement_date', 'id')
-    )
-    if participant:
-        lots = lots.filter(participant=participant)
-
+    lots = TraceLot.objects.select_related('participant', 'product', 'supplier', 'entry').filter(source_type='entry').order_by('movement_date', 'id')
+    if participant: lots = lots.filter(participant=participant)
     rows = []
     for lot in lots:
-        sale_allocations = getattr(lot, 'sale_allocations_prefetched', [])
-        transformation_allocations = getattr(lot, 'transformation_allocations_prefetched', [])
-        sales_total = sum((to_decimal(a.quantity_base) for a in sale_allocations), Decimal('0'))
-        transformations_total = sum((to_decimal(a.quantity_base) for a in transformation_allocations), Decimal('0'))
-        customers = ', '.join(sorted({str(a.sale.customer) for a in sale_allocations if a.sale_id and a.sale and a.sale.customer_id}))
-        quantity_total = to_decimal(lot.quantity_base).quantize(Decimal('0.001'))
-        quantity_sold = sales_total.quantize(Decimal('0.001'))
-        quantity_transformed = transformations_total.quantize(Decimal('0.001'))
-        quantity_remaining = (to_decimal(lot.quantity_base) - sales_total - transformations_total).quantize(Decimal('0.001'))
-        rows.append({
-            'participant': lot.participant,
-            'entry': lot.entry,
-            'supplier': lot.supplier,
-            'product': lot.product,
-            'movement_date': lot.movement_date,
-            'quantity_total': quantity_total,
-            'quantity_sold': quantity_sold,
-            'quantity_transformed': quantity_transformed,
-            'quantity_remaining': quantity_remaining,
-            'unit': lot.product.get_unit_display(),
-            'customers': customers,
-        })
+        sales_total = to_decimal(lot.allocations.filter(target_type='sale').aggregate(total=Sum('quantity_base'))['total'])
+        transformations_total = to_decimal(lot.allocations.filter(target_type='transformation').aggregate(total=Sum('quantity_base'))['total'])
+        customers = ', '.join(sorted({str(a.sale.customer) for a in lot.allocations.select_related('sale__customer').filter(target_type='sale', sale__customer__isnull=False)}))
+        rows.append({'participant': lot.participant,'entry': lot.entry,'supplier': lot.supplier,'product': lot.product,'movement_date': lot.movement_date,'quantity_total': to_decimal(lot.quantity_base).quantize(Decimal('0.001')),'quantity_sold': sales_total.quantize(Decimal('0.001')),'quantity_transformed': transformations_total.quantize(Decimal('0.001')),'quantity_remaining': get_lot_remaining(lot),'unit': lot.product.get_unit_display(),'customers': customers})
     return rows
 
 def get_participant_alerts(participant, *, today=None):

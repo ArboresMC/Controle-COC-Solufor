@@ -44,10 +44,6 @@ class Participant(models.Model):
 
     class Meta:
         ordering = ['trade_name', 'legal_name']
-        indexes = [
-            models.Index(fields=['organization', 'status'], name='part_org_status_idx'),
-            models.Index(fields=['organization', 'trade_name'], name='part_org_trade_idx'),
-        ]
 
     def __str__(self):
         return self.trade_name or self.legal_name

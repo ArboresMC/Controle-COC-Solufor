@@ -11,13 +11,11 @@
     color: #0b6280;
     font-weight: 600;
   }
-
   .import-note.is-visible {
     display: flex;
     align-items: center;
     gap: 12px;
   }
-
   .import-spinner {
     width: 18px;
     height: 18px;
@@ -27,26 +25,26 @@
     animation: import-spin .8s linear infinite;
     flex: 0 0 18px;
   }
-
-  @keyframes import-spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .actions.is-busy .btn {
-    pointer-events: none;
-    opacity: .78;
-  }
-
-  .actions .btn[disabled] {
-    cursor: not-allowed;
-    transform: none !important;
-  }
-
-  .import-hint {
-    margin-top: 10px;
-    color: var(--muted);
-    font-size: 13px;
-  }
+  @keyframes import-spin { to { transform: rotate(360deg); } }
+  .actions.is-busy .btn { pointer-events: none; opacity: .78; }
+  .actions .btn[disabled] { cursor: not-allowed; transform: none !important; }
+  .import-hint { margin-top: 10px; color: var(--muted); font-size: 13px; }
+  .queue-card { margin-top: 18px; }
+  .queue-status { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:12px; }
+  .status-pill { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px; }
+  .status-pill.pending { background:#fff7ed; color:#9a3412; }
+  .status-pill.processing { background:#eff6ff; color:#1d4ed8; }
+  .status-pill.completed { background:#ecfdf5; color:#047857; }
+  .status-pill.failed { background:#fef2f2; color:#b91c1c; }
+  .progress-wrap { margin-top:14px; }
+  .progress-bar { width:100%; height:12px; border-radius:999px; background:#e5e7eb; overflow:hidden; }
+  .progress-fill { height:100%; width:0%; background:linear-gradient(90deg, #0b6280, #14b8a6); transition:width .25s ease; }
+  .progress-meta { display:flex; justify-content:space-between; gap:12px; margin-top:8px; color:var(--muted); font-size:13px; }
+  .job-errors { margin-top:14px; }
+  .job-errors ul { margin: 8px 0 0 18px; }
+  .job-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:12px; margin-top:16px; }
+  .job-summary-item { background:#f8fafc; border:1px solid rgba(15,23,42,.08); border-radius:14px; padding:14px; }
+  .job-summary-item strong { display:block; font-size:26px; }
 </style>
 
 <div class="split">
@@ -55,7 +53,7 @@
       <div>
         <div class="kicker">Importação inteligente</div>
         <h2 class="card-title">Validar e importar planilha</h2>
-        <p class="card-subtitle">Envie a planilha no modelo oficial. O sistema valida linha por linha antes de importar.</p>
+        <p class="card-subtitle">A validação continua imediata. A importação agora entra em uma fila interna, sem travar a página nem exigir serviço pago extra.</p>
       </div>
       <a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a>
     </div>
@@ -68,30 +66,79 @@
         <button class="btn secondary" type="submit" name="action" value="validate" data-idle-label="Validar planilha" data-busy-label="Validando...">
           <span class="btn-label">Validar planilha</span>
         </button>
-        <button class="btn" type="submit" name="action" value="import" data-idle-label="Importar planilha" data-busy-label="Importando...">
-          <span class="btn-label">Importar planilha</span>
+        <button class="btn" type="submit" name="action" value="import" data-idle-label="Enviar para fila" data-busy-label="Enviando para fila...">
+          <span class="btn-label">Enviar para fila</span>
         </button>
       </div>
 
       <div class="import-note" id="import-note" aria-live="polite">
         <span class="import-spinner" aria-hidden="true"></span>
-        <span id="import-note-text">Processando arquivo. Não feche nem atualize esta página até a conclusão.</span>
+        <span id="import-note-text">Preparando arquivo. Não feche nem atualize a página até o envio concluir.</span>
       </div>
 
       <div class="import-hint">
-        Arquivos grandes podem levar alguns minutos para concluir.
+        A importação pesada roda em fila interna. Você pode navegar pelo sistema enquanto ela processa.
       </div>
     </form>
   </div>
 
   <div class="card soft">
     <div class="stack">
-      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes da importação.</span></div>
-      <div class="info-box"><strong>Cadastro automático</strong><br><span class="muted">Produtos, clientes e fornecedores podem ser criados automaticamente conforme o arquivo.</span></div>
-      <div class="info-box"><strong>Planilha modelo</strong><br><span class="muted">Use as abas Entradas, Saidas e Transformacoes do modelo oficial.</span></div>
+      <div class="info-box"><strong>Sem custo extra</strong><br><span class="muted">A fila usa o próprio banco e um worker simples rodando junto com o projeto.</span></div>
+      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">Nada entra na fila se a planilha já estiver com inconsistências.</span></div>
+      <div class="info-box"><strong>Progresso visível</strong><br><span class="muted">Acompanhe status, linhas processadas e resumo final sem travar o navegador.</span></div>
     </div>
   </div>
 </div>
+
+{% if import_job %}
+<div class="card queue-card" id="import-job-card" data-status-url="{% url 'report_import_job_status' import_job.id %}">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Fila de importação</div>
+      <h2 class="card-title">Job #{{ import_job.id }}</h2>
+      <p class="card-subtitle">Arquivo: <strong id="job-file-name">{{ import_job.original_filename|default:'planilha enviada' }}</strong>{% if import_job.participant %} · Participante: <strong>{{ import_job.participant }}</strong>{% endif %}</p>
+    </div>
+  </div>
+
+  <div class="queue-status">
+    <span class="status-pill {{ import_job.status }}" id="job-status-pill">{{ import_job.get_status_display }}</span>
+    <span class="muted" id="job-status-text">
+      {% if import_job.status == 'pending' %}
+        Aguardando worker pegar a importação.
+      {% elif import_job.status == 'processing' %}
+        Importação em andamento.
+      {% elif import_job.status == 'completed' %}
+        Importação concluída.
+      {% else %}
+        Importação finalizada com falha.
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="job-progress-fill"></div></div>
+    <div class="progress-meta">
+      <span id="job-progress-label">0%</span>
+      <span id="job-progress-count">{{ import_job.progress_current }} / {{ import_job.progress_total }} linhas</span>
+    </div>
+  </div>
+
+  <div class="job-summary-grid">
+    <div class="job-summary-item"><span class="muted">Entradas</span><strong id="job-entries">{{ import_job.summary.entries|default:0 }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Saídas</span><strong id="job-sales">{{ import_job.summary.sales|default:0 }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Transformações</span><strong id="job-transformations">{{ import_job.summary.transformations|default:0 }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Erros</span><strong id="job-errors-count">{{ import_job.error_messages|length }}</strong></div>
+  </div>
+
+  <div class="job-errors" id="job-errors-box" {% if not import_job.error_messages %}style="display:none"{% endif %}>
+    <strong>Ocorrências</strong>
+    <ul id="job-errors-list">
+      {% for error in import_job.error_messages %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
 
 {% if preview_errors %}
 <div class="card">
@@ -120,7 +167,6 @@
     const actions = document.getElementById('import-actions');
     const note = document.getElementById('import-note');
     const noteText = document.getElementById('import-note-text');
-
     if (!form || !actions || !note || !noteText) return;
 
     let busy = false;
@@ -128,56 +174,112 @@
     function setBusy(button) {
       if (busy) return false;
       busy = true;
-
       const action = button?.value || '';
-      const isImport = action === 'import';
-      const isValidate = action === 'validate';
-
       actions.classList.add('is-busy');
       note.classList.add('is-visible');
-
-      if (isImport) {
-        noteText.textContent = 'Importando planilha. Não feche nem atualize esta página até a conclusão.';
-      } else if (isValidate) {
+      if (action === 'import') {
+        noteText.textContent = 'Enviando arquivo para a fila interna. Aguarde esta etapa finalizar.';
+      } else if (action === 'validate') {
         noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
       } else {
-        noteText.textContent = 'Processando arquivo. Não feche nem atualize esta página até a conclusão.';
+        noteText.textContent = 'Processando arquivo. Aguarde a conclusão.';
       }
-
       actions.querySelectorAll('button').forEach((btn) => {
         btn.disabled = true;
         const label = btn.querySelector('.btn-label');
-        if (label) {
-          label.textContent = btn.dataset.busyLabel || 'Processando...';
-        }
+        if (label) label.textContent = btn.dataset.busyLabel || 'Processando...';
       });
-
       if (button) {
         button.disabled = false;
         const label = button.querySelector('.btn-label');
-        if (label) {
-          label.textContent = button.dataset.busyLabel || 'Processando...';
-        }
+        if (label) label.textContent = button.dataset.busyLabel || 'Processando...';
       }
-
       return true;
     }
 
     actions.querySelectorAll('button[type="submit"]').forEach((button) => {
       button.addEventListener('click', function () {
-        actions.querySelectorAll('button[type="submit"]').forEach((btn) => {
-          delete btn.dataset.clicked;
-        });
+        actions.querySelectorAll('button[type="submit"]').forEach((btn) => delete btn.dataset.clicked);
         this.dataset.clicked = '1';
       });
     });
 
     form.addEventListener('submit', function (event) {
       const clickedButton = actions.querySelector('button[data-clicked="1"]') || document.activeElement;
-      if (!setBusy(clickedButton)) {
-        event.preventDefault();
-      }
+      if (!setBusy(clickedButton)) event.preventDefault();
     });
+  })();
+
+  (function () {
+    const card = document.getElementById('import-job-card');
+    if (!card) return;
+
+    const url = card.dataset.statusUrl;
+    const statusPill = document.getElementById('job-status-pill');
+    const statusText = document.getElementById('job-status-text');
+    const progressFill = document.getElementById('job-progress-fill');
+    const progressLabel = document.getElementById('job-progress-label');
+    const progressCount = document.getElementById('job-progress-count');
+    const entries = document.getElementById('job-entries');
+    const sales = document.getElementById('job-sales');
+    const transformations = document.getElementById('job-transformations');
+    const errorsCount = document.getElementById('job-errors-count');
+    const errorsBox = document.getElementById('job-errors-box');
+    const errorsList = document.getElementById('job-errors-list');
+    const fileName = document.getElementById('job-file-name');
+
+    function render(data) {
+      const total = Number(data.progress_total || 0);
+      const current = Number(data.progress_current || 0);
+      const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : (data.status === 'completed' ? 100 : 0);
+      progressFill.style.width = percent + '%';
+      progressLabel.textContent = percent + '%';
+      progressCount.textContent = current + ' / ' + total + ' linhas';
+      statusPill.className = 'status-pill ' + data.status;
+      statusPill.textContent = data.status_label;
+      fileName.textContent = data.original_filename || 'planilha enviada';
+      entries.textContent = data.summary?.entries || 0;
+      sales.textContent = data.summary?.sales || 0;
+      transformations.textContent = data.summary?.transformations || 0;
+      errorsCount.textContent = (data.errors || []).length;
+
+      if (data.status === 'pending') {
+        statusText.textContent = 'Aguardando worker pegar a importação.';
+      } else if (data.status === 'processing') {
+        statusText.textContent = 'Importação em andamento. Você pode continuar usando o sistema.';
+      } else if (data.status === 'completed') {
+        statusText.textContent = 'Importação concluída com sucesso.';
+      } else {
+        statusText.textContent = 'A importação terminou com falhas. Revise as ocorrências abaixo.';
+      }
+
+      const errors = data.errors || [];
+      if (errors.length) {
+        errorsBox.style.display = 'block';
+        errorsList.innerHTML = errors.slice(0, 50).map((item) => '<li>' + item + '</li>').join('');
+      } else {
+        errorsBox.style.display = 'none';
+        errorsList.innerHTML = '';
+      }
+
+      return data.status;
+    }
+
+    async function poll() {
+      try {
+        const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!response.ok) return;
+        const data = await response.json();
+        const status = render(data);
+        if (status === 'pending' || status === 'processing') {
+          window.setTimeout(poll, 2500);
+        }
+      } catch (error) {
+        window.setTimeout(poll, 5000);
+      }
+    }
+
+    poll();
   })();
 </script>
 {% endblock %}
