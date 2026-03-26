@@ -1,10 +1,8 @@
 from decimal import Decimal
 from unicodedata import normalize
 
-from django.core.files.base import File
 from django.db import transaction
 from io import BytesIO
-from pathlib import Path
 
 import openpyxl
 from reportlab.lib import colors
@@ -14,15 +12,14 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponse
+from django.shortcuts import redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_GET
 from django.views import View
 
 from catalog.models import Counterparty, Product
 from participants.models import Participant
-from transactions.models import EntryRecord, SaleRecord, TransformationRecord
+from transactions.models import EntryRecord, SaleRecord, TransformationRecord, TraceLot, LotAllocation
 from transactions.services import (
     build_traceability_rows,
     calculate_target_from_source,
@@ -32,10 +29,12 @@ from transactions.services import (
     reallocate_sale,
     reallocate_transformation_sources,
     sync_entry_lot,
+    sync_transformation_metadata,
     sync_transformation_target_lot,
+    get_lot_remaining_for_sale,
+    get_lot_remaining_for_transformation,
 )
 from .forms import ImportWorkbookForm
-from .models import ImportJob
 
 
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
@@ -82,6 +81,192 @@ def _first_present(row, *keys):
     return None
 
 
+
+
+def _split_multi_value(value):
+    raw = _safe_str(value)
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(';') if item is not None and str(item).strip() != '']
+
+
+def _parse_manual_origin_spec(row):
+    lot_ids = _split_multi_value(_first_present(row, 'id_lote_origem'))
+    lot_codes = _split_multi_value(_first_present(row, 'lote_origem'))
+    documents = _split_multi_value(_first_present(row, 'documento_origem'))
+    quantities = _split_multi_value(_first_present(row, 'quantidade_origem'))
+    origin_types = [item.lower() for item in _split_multi_value(_first_present(row, 'origem_tipo'))]
+
+    lengths = [len(items) for items in [lot_ids, lot_codes, documents, quantities, origin_types] if items]
+    if not lengths:
+        return []
+    count = max(lengths)
+    for items, label in [
+        (lot_ids, 'id_lote_origem'),
+        (lot_codes, 'lote_origem'),
+        (documents, 'documento_origem'),
+        (quantities, 'quantidade_origem'),
+        (origin_types, 'origem_tipo'),
+    ]:
+        if items and len(items) not in (1, count):
+            raise ValueError(f'Quantidade de itens inconsistente na coluna {label}.')
+
+    def expand(items):
+        if not items:
+            return [''] * count
+        if len(items) == 1 and count > 1:
+            return items * count
+        return items
+
+    items = []
+    for idx in range(count):
+        item = {
+            'lot_id': expand(lot_ids)[idx],
+            'lot_code': expand(lot_codes)[idx],
+            'document_number': expand(documents)[idx],
+            'quantity': expand(quantities)[idx],
+            'origin_type': expand(origin_types)[idx],
+        }
+        if not any(item.values()):
+            continue
+        if not item['quantity']:
+            raise ValueError('Informe quantidade_origem para cada origem manual.')
+        items.append(item)
+    return items
+
+
+def _find_trace_lot_for_import(participant, product, spec, *, allow_transformation_sources=True):
+    qs = TraceLot.objects.filter(participant=participant, product=product)
+    if not allow_transformation_sources:
+        qs = qs.filter(source_type='entry')
+
+    lot_id = _safe_str(spec.get('lot_id'))
+    if lot_id:
+        try:
+            return qs.select_related('entry', 'transformation', 'supplier', 'product').get(pk=int(lot_id))
+        except (ValueError, TraceLot.DoesNotExist):
+            raise ValueError(f'id_lote_origem inválido ou inexistente: {lot_id}.')
+
+    doc = _safe_str(spec.get('document_number'))
+    lot_code = _safe_str(spec.get('lot_code'))
+    origin_type = _safe_str(spec.get('origin_type')).lower()
+
+    if origin_type and origin_type not in {'entry', 'transformation'}:
+        raise ValueError(f'origem_tipo inválido: {origin_type}. Use entry ou transformation.')
+    if origin_type:
+        qs = qs.filter(source_type=origin_type)
+    if lot_code:
+        qs = qs.filter(entry__batch_code=lot_code) | qs.filter(transformation__batch_code=lot_code)
+    if doc:
+        qs = qs.filter(entry__document_number=doc) | qs.filter(transformation__document_number=doc)
+
+    matches = list(qs.select_related('entry', 'transformation', 'supplier', 'product').distinct())
+    if not matches:
+        raise ValueError('Nenhum lote de origem encontrado com os critérios informados.')
+    if len(matches) > 1:
+        ids = ', '.join(str(item.id) for item in matches[:10])
+        raise ValueError(f'Origem ambígua. Informe id_lote_origem. Lotes candidatos: {ids}.')
+    return matches[0]
+
+
+def _resolve_manual_origin_allocations(participant, product, row, *, allow_transformation_sources=True):
+    specs = _parse_manual_origin_spec(row)
+    allocations = []
+    for spec in specs:
+        lot = _find_trace_lot_for_import(
+            participant,
+            product,
+            spec,
+            allow_transformation_sources=allow_transformation_sources,
+        )
+        qty = _decimal(spec.get('quantity'))
+        if qty <= 0:
+            raise ValueError('quantidade_origem deve ser maior que zero.')
+        allocations.append({'lot': lot, 'quantity_base': qty.quantize(Decimal('0.001'))})
+    return allocations
+
+
+def _validate_manual_allocations_total(allocations, expected_quantity_base):
+    total = sum((item['quantity_base'] for item in allocations), Decimal('0'))
+    total = total.quantize(Decimal('0.001'))
+    expected = _decimal(expected_quantity_base).quantize(Decimal('0.001'))
+    if total != expected:
+        raise ValueError(f'A soma de quantidade_origem ({total}) deve ser igual à quantidade da linha ({expected}).')
+
+
+def _apply_manual_sale_allocations(sale, allocations):
+    if not allocations:
+        return reallocate_sale(sale)
+    sale.lot_allocations.all().delete()
+    selected_supplier = None
+    selected_claim = None
+    remaining_map = {}
+
+    for item in allocations:
+        lot = item['lot']
+        quantity_base = item['quantity_base']
+        if lot.participant_id != sale.participant_id or lot.product_id != sale.product_id:
+            raise ValueError('O lote informado não pertence ao participante/produto da saída.')
+        remaining = remaining_map.get(lot.id)
+        if remaining is None:
+            remaining = get_lot_remaining_for_sale(lot, sale=sale)
+        if quantity_base > remaining:
+            raise ValueError(f'Lote #{lot.id} sem saldo suficiente. Disponível: {remaining}.')
+        if selected_supplier is None:
+            selected_supplier = lot.supplier
+        elif lot.supplier_id != getattr(selected_supplier, 'id', None):
+            raise ValueError('A saída não pode consumir lotes de fornecedores diferentes.')
+        lot_claim = (lot.fsc_claim or '').strip()
+        if selected_claim is None:
+            selected_claim = lot_claim
+        elif lot_claim != selected_claim:
+            raise ValueError('A saída não pode consumir lotes com declarações FSC diferentes.')
+        LotAllocation.objects.create(
+            participant=sale.participant,
+            lot=lot,
+            sale=sale,
+            target_type='sale',
+            quantity_base=quantity_base,
+        )
+        remaining_map[lot.id] = (remaining - quantity_base).quantize(Decimal('0.001'))
+
+    sale.supplier = selected_supplier
+    sale.fsc_claim = selected_claim or ''
+    sale.save(update_fields=['supplier', 'fsc_claim'])
+
+
+def _apply_manual_transformation_allocations(transformation, allocations):
+    if not allocations:
+        reallocate_transformation_sources(transformation)
+        sync_transformation_target_lot(transformation)
+        return
+    transformation.source_lot_allocations.all().delete()
+    remaining_map = {}
+
+    for item in allocations:
+        lot = item['lot']
+        quantity_base = item['quantity_base']
+        if lot.participant_id != transformation.participant_id or lot.product_id != transformation.source_product_id:
+            raise ValueError('O lote informado não pertence ao participante/produto de origem da transformação.')
+        if lot.source_type != 'entry':
+            raise ValueError('Transformações só podem consumir lotes de entrada.')
+        remaining = remaining_map.get(lot.id)
+        if remaining is None:
+            remaining = get_lot_remaining_for_transformation(lot, transformation=transformation)
+        if quantity_base > remaining:
+            raise ValueError(f'Lote #{lot.id} sem saldo suficiente. Disponível: {remaining}.')
+        LotAllocation.objects.create(
+            participant=transformation.participant,
+            lot=lot,
+            transformation=transformation,
+            target_type='transformation',
+            quantity_base=quantity_base,
+        )
+        remaining_map[lot.id] = (remaining - quantity_base).quantize(Decimal('0.001'))
+
+    sync_transformation_metadata(transformation)
+    sync_transformation_target_lot(transformation)
+
 def _coerce_product(product_name, *, default_unit=None, create_if_missing=False):
     product_name = _safe_str(product_name)
     if not product_name:
@@ -106,20 +291,10 @@ def _get_or_create_counterparty(participant, name, *, type_):
     )[0]
 
 
-def _build_import_preview(workbook, participant, user, persist=False, progress_callback=None):
+def _build_import_preview(workbook, participant, user, persist=False):
     summary = {'entries': 0, 'sales': 0, 'transformations': 0}
     errors = []
     previews = {'entries': [], 'sales': [], 'transformations': []}
-
-    total_rows = 0
-    for sheet_name in ('Entradas', 'Saidas', 'Transformacoes'):
-        if sheet_name in workbook.sheetnames:
-            sheet = workbook[sheet_name]
-            total_rows += sum(1 for _idx, _row in _sheet_rows(sheet))
-    processed_rows = 0
-
-    if progress_callback:
-        progress_callback(processed_rows, total_rows)
 
     if 'Entradas' in workbook.sheetnames:
         sheet = workbook['Entradas']
@@ -175,10 +350,6 @@ def _build_import_preview(workbook, participant, user, persist=False, progress_c
                     sync_entry_lot(obj)
             except Exception as exc:
                 errors.append(f'Entradas linha {idx}: {exc}')
-            finally:
-                processed_rows += 1
-                if progress_callback:
-                    progress_callback(processed_rows, total_rows)
 
     if 'Saidas' in workbook.sheetnames:
         sheet = workbook['Saidas']
@@ -204,6 +375,9 @@ def _build_import_preview(workbook, participant, user, persist=False, progress_c
                 quantidade = _decimal(quantidade)
                 unidade = _safe_str(unidade) or product.unit
                 quantity_base = convert_to_base(product, quantidade, unidade)
+                manual_allocations = _resolve_manual_origin_allocations(participant, product, row, allow_transformation_sources=True)
+                if manual_allocations:
+                    _validate_manual_allocations_total(manual_allocations, quantity_base)
                 preview = {
                     'linha': idx,
                     'data': data,
@@ -213,6 +387,14 @@ def _build_import_preview(workbook, participant, user, persist=False, progress_c
                     'quantity': quantidade,
                     'unit': unidade,
                     'quantity_base': quantity_base,
+                    'manual_sources': [
+                        {
+                            'lot_id': item['lot'].id,
+                            'lot_label': item['lot'].label,
+                            'quantity_base': item['quantity_base'],
+                        }
+                        for item in manual_allocations
+                    ],
                 }
                 previews['sales'].append(preview)
                 summary['sales'] += 1
@@ -233,13 +415,9 @@ def _build_import_preview(workbook, participant, user, persist=False, progress_c
                         created_by=user,
                         status='submitted',
                     )
-                    reallocate_sale(obj)
+                    _apply_manual_sale_allocations(obj, manual_allocations)
             except Exception as exc:
                 errors.append(f'Saidas linha {idx}: {exc}')
-            finally:
-                processed_rows += 1
-                if progress_callback:
-                    progress_callback(processed_rows, total_rows)
 
     if 'Transformacoes' in workbook.sheetnames:
         sheet = workbook['Transformacoes']
@@ -271,6 +449,9 @@ def _build_import_preview(workbook, participant, user, persist=False, progress_c
                 if not rule.yield_factor:
                     raise ValueError('A regra de transformação está com fator de rendimento inválido.')
                 source_quantity_base = (target_quantity_base / Decimal(str(rule.yield_factor))).quantize(Decimal('0.001'))
+                manual_allocations = _resolve_manual_origin_allocations(participant, source_product, row, allow_transformation_sources=False)
+                if manual_allocations:
+                    _validate_manual_allocations_total(manual_allocations, source_quantity_base)
 
                 preview = {
                     'linha': idx,
@@ -285,6 +466,14 @@ def _build_import_preview(workbook, participant, user, persist=False, progress_c
                     'target_unit': target_unit,
                     'target_quantity_base': target_quantity_base,
                     'yield_factor': rule.yield_factor,
+                    'manual_sources': [
+                        {
+                            'lot_id': item['lot'].id,
+                            'lot_label': item['lot'].label,
+                            'quantity_base': item['quantity_base'],
+                        }
+                        for item in manual_allocations
+                    ],
                 }
                 previews['transformations'].append(preview)
                 summary['transformations'] += 1
@@ -306,14 +495,9 @@ def _build_import_preview(workbook, participant, user, persist=False, progress_c
                         notes=_safe_str(observacoes),
                         created_by=user,
                     )
-                    reallocate_transformation_sources(obj)
-                    sync_transformation_target_lot(obj)
+                    _apply_manual_transformation_allocations(obj, manual_allocations)
             except Exception as exc:
                 errors.append(f'Transformacoes linha {idx}: {exc}')
-            finally:
-                processed_rows += 1
-                if progress_callback:
-                    progress_callback(processed_rows, total_rows)
 
     return summary, errors, previews
 
@@ -428,96 +612,6 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
         })
 
 
-def _serialize_preview(preview):
-    def _serialize_row(row):
-        payload = {}
-        for key, value in row.items():
-            if hasattr(value, 'isoformat'):
-                payload[key] = value.isoformat()
-            else:
-                payload[key] = str(value) if isinstance(value, Decimal) else value
-        return payload
-
-    return {
-        'entries': [_serialize_row(row) for row in preview.get('entries', [])[:100]],
-        'sales': [_serialize_row(row) for row in preview.get('sales', [])[:100]],
-        'transformations': [_serialize_row(row) for row in preview.get('transformations', [])[:100]],
-    }
-
-
-def process_import_job(job):
-    def _heartbeat(current, total):
-        ImportJob.objects.filter(pk=job.pk).update(
-            progress_current=current,
-            progress_total=total,
-            last_heartbeat=timezone.now(),
-        )
-
-    now = timezone.now()
-    ImportJob.objects.filter(pk=job.pk).update(
-        status=ImportJob.STATUS_PROCESSING,
-        started_at=now,
-        last_heartbeat=now,
-        error_messages=[],
-    )
-
-    try:
-        with job.workbook.open('rb') as fh:
-            workbook = openpyxl.load_workbook(fh)
-            with transaction.atomic():
-                summary, errors, preview = _build_import_preview(
-                    workbook,
-                    job.participant,
-                    job.created_by,
-                    persist=True,
-                    progress_callback=_heartbeat,
-                )
-
-        status = ImportJob.STATUS_COMPLETED if not errors else ImportJob.STATUS_FAILED
-        refreshed = ImportJob.objects.get(pk=job.pk)
-        ImportJob.objects.filter(pk=job.pk).update(
-            status=status,
-            summary=summary,
-            error_messages=errors,
-            preview=_serialize_preview(preview),
-            finished_at=timezone.now(),
-            last_heartbeat=timezone.now(),
-            progress_current=refreshed.progress_total or refreshed.progress_current,
-        )
-    except Exception as exc:
-        ImportJob.objects.filter(pk=job.pk).update(
-            status=ImportJob.STATUS_FAILED,
-            error_messages=[str(exc)],
-            finished_at=timezone.now(),
-            last_heartbeat=timezone.now(),
-        )
-        raise
-
-
-@require_GET
-def import_job_status(request, job_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'detail': 'Autenticação necessária.'}, status=403)
-
-    job = get_object_or_404(ImportJob.objects.select_related('participant', 'created_by'), pk=job_id)
-    if (not request.user.is_manager) and job.created_by_id != request.user.id:
-        return JsonResponse({'detail': 'Acesso negado.'}, status=403)
-
-    return JsonResponse({
-        'id': job.id,
-        'status': job.status,
-        'status_label': job.get_status_display(),
-        'summary': job.summary or {},
-        'errors': job.error_messages or [],
-        'progress_current': job.progress_current,
-        'progress_total': job.progress_total,
-        'started_at': job.started_at.isoformat() if job.started_at else None,
-        'finished_at': job.finished_at.isoformat() if job.finished_at else None,
-        'participant': str(job.participant),
-        'original_filename': job.original_filename,
-    })
-
-
 class ImportTemplateDownloadView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         wb = openpyxl.Workbook()
@@ -526,11 +620,12 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
         ws1.append(['data', 'documento', 'fornecedor', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'observacoes'])
         ws1.append(['2026-03-18', 'NF-ENT-001', 'Fornecedor Exemplo', 'Toras e Toretes 100%', 10, 't', 'FSC 100%', 'L001', 'Exemplo'])
         ws2 = wb.create_sheet('Saidas')
-        ws2.append(['data', 'documento', 'cliente', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'observacoes'])
-        ws2.append(['2026-03-18', 'NF-SAI-001', 'Cliente Exemplo', 'Madeira Serrada 100%', 2, 'm3', 'FSC 100%', 'L001', 'Exemplo'])
+        ws2.append(['data', 'documento', 'cliente', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'id_lote_origem', 'origem_tipo', 'documento_origem', 'lote_origem', 'quantidade_origem', 'observacoes'])
+        ws2.append(['2026-03-18', 'NF-SAI-001', 'Cliente Exemplo', 'Madeira Serrada 100%', 2, 'm3', 'FSC 100%', 'L001', '15', 'entry', 'NF-ENT-001', 'L001', '2.000', 'Use id_lote_origem quando quiser travar a origem de forma inequívoca.'])
+        ws2.append(['2026-03-18', 'NF-SAI-002', 'Cliente Exemplo', 'Madeira Serrada 100%', 3, 'm3', 'FSC 100%', 'L002', '15;18', 'entry;transformation', 'NF-ENT-001;TRF-004', 'L001;LT-TRF-004', '1.500;1.500', 'Também aceita múltiplas origens separadas por ;'])
         ws3 = wb.create_sheet('Transformacoes')
-        ws3.append(['data', 'documento', 'cliente_final', 'produto_origem', 'produto_destino', 'quantidade_produzida', 'unidade_destino', 'observacoes'])
-        ws3.append(['2026-03-18', 'TRF-001', 'Cliente Exemplo', 'Toras e Toretes 100%', 'Madeira Serrada 100%', 5, 'm3', 'Informe a produção final; o sistema calcula automaticamente o consumo da origem.'])
+        ws3.append(['data', 'documento', 'cliente_final', 'produto_origem', 'produto_destino', 'quantidade_produzida', 'unidade_destino', 'id_lote_origem', 'documento_origem', 'lote_origem', 'quantidade_origem', 'observacoes'])
+        ws3.append(['2026-03-18', 'TRF-001', 'Cliente Exemplo', 'Toras e Toretes 100%', 'Madeira Serrada 100%', 5, 'm3', '11', 'NF-ENT-001', 'L001', '10.000', 'Use id_lote_origem para travar a origem; se ficar em branco, o sistema usa FIFO automático.'])
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename=modelo_importacao_fsc.xlsx'
         wb.save(response)
@@ -540,21 +635,19 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
 class ImportWorkbookView(LoginRequiredMixin, View):
     template_name = 'reports/import_workbook.html'
 
-    def _render(self, request, form, preview=None, errors=None, summary=None, import_job=None):
+    def _render(self, request, form, preview=None, errors=None, summary=None):
         return render(request, self.template_name, {
             'form': form,
             'preview': preview or {},
             'preview_errors': errors or [],
             'summary': summary or {},
-            'import_job': import_job,
         })
 
     def get(self, request, *args, **kwargs):
         form = ImportWorkbookForm(initial={'action': 'validate'})
         if not request.user.is_manager:
             form.fields.pop('participant', None)
-        import_job = ImportJob.objects.filter(created_by=request.user).order_by('-created_at').first()
-        return self._render(request, form, import_job=import_job)
+        return self._render(request, form)
 
     def post(self, request, *args, **kwargs):
         form = ImportWorkbookForm(request.POST, request.FILES)
@@ -569,35 +662,23 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             return self._render(request, form)
 
         action = request.POST.get('action') or 'validate'
-        workbook_file = form.cleaned_data['workbook']
+        workbook = openpyxl.load_workbook(form.cleaned_data['workbook'])
+        summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=False)
 
-        if action == 'validate':
-            workbook = openpyxl.load_workbook(workbook_file)
-            summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=False)
+        if action == 'validate' or errors:
             if errors:
                 messages.warning(request, f'Validação concluída com {len(errors)} inconsistências. Corrija a planilha antes de importar.')
             else:
                 messages.success(request, 'Validação concluída sem inconsistências. A planilha está pronta para importação.')
             return self._render(request, form, preview=preview, errors=errors, summary=summary)
 
-        workbook = openpyxl.load_workbook(workbook_file)
-        summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=False)
+        # import action
+        workbook = openpyxl.load_workbook(form.cleaned_data['workbook'])
+        with transaction.atomic():
+            summary, errors, preview = _build_import_preview(workbook, participant, request.user, persist=True)
         if errors:
-            messages.error(request, 'A importação não foi enfileirada porque a validação encontrou inconsistências. Corrija a planilha e tente novamente.')
+            messages.error(request, 'A importação encontrou inconsistências e não foi concluída por completo. Revise a planilha.')
             return self._render(request, form, preview=preview, errors=errors, summary=summary)
 
-        workbook_file.seek(0)
-        import_job = ImportJob.objects.create(
-            participant=participant,
-            created_by=request.user,
-            original_filename=Path(workbook_file.name).name,
-            summary=summary,
-            preview=_serialize_preview(preview),
-        )
-        import_job.workbook.save(Path(workbook_file.name).name, File(workbook_file), save=True)
-
-        messages.success(request, 'Importação enviada para a fila interna. Você pode acompanhar o progresso nesta tela sem travar o sistema.')
-        fresh_form = ImportWorkbookForm(initial={'action': 'validate'})
-        if not request.user.is_manager:
-            fresh_form.fields.pop('participant', None)
-        return self._render(request, fresh_form, import_job=import_job)
+        messages.success(request, f"Importação concluída. Entradas: {summary['entries']}, saídas: {summary['sales']}, transformações: {summary['transformations']}.")
+        return redirect('dashboard')

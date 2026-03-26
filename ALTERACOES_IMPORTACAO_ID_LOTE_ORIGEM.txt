@@ -1,0 +1,18 @@
+ALTERAÇÕES - IMPORTAÇÃO COM id_lote_origem
+
+Arquivos alterados:
+- reports/views.py
+- templates/reports/import_workbook.html
+
+O que mudou:
+- modelo de importação agora inclui a coluna id_lote_origem em Saidas e Transformacoes
+- prioridade de identificação da origem: id_lote_origem > documento_origem/lote_origem
+- suporta múltiplas origens separadas por ;
+- valida total de quantidade_origem contra a quantidade da linha
+- em Saidas, pode consumir lotes de entrada ou transformação
+- em Transformacoes, mantém consumo apenas de lotes de entrada
+- se as colunas de origem ficarem vazias, continua usando a lógica automática atual
+
+Observação:
+- não há migration nova
+- basta substituir os arquivos e subir o projeto
