@@ -156,6 +156,22 @@ else:
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
 
+
+
+CACHE_TTL_DASHBOARD = int(os.getenv('CACHE_TTL_DASHBOARD', '60'))
+CACHE_TTL_TRACEABILITY = int(os.getenv('CACHE_TTL_TRACEABILITY', '120'))
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'portal-fsc-cache',
+        'TIMEOUT': int(os.getenv('CACHE_DEFAULT_TIMEOUT', '300')),
+        'OPTIONS': {
+            'MAX_ENTRIES': int(os.getenv('CACHE_MAX_ENTRIES', '2000')),
+            'CULL_FREQUENCY': 3,
+        },
+    }
+}
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 LOGIN_URL = 'login'

@@ -167,6 +167,7 @@ class TraceLot(models.Model):
     fsc_claim = models.CharField('Declaração FSC', max_length=100, blank=True)
     movement_date = models.DateField('Data de origem')
     quantity_base = models.DecimalField('Quantidade do lote', max_digits=14, decimal_places=3, default=0)
+    quantity_available = models.DecimalField('Saldo disponível', max_digits=14, decimal_places=3, default=0, db_index=True)
     unit_snapshot = models.CharField('Unidade base', max_length=10, choices=[('m3', 'm³'), ('kg', 'kg'), ('t', 't'), ('un', 'un')])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

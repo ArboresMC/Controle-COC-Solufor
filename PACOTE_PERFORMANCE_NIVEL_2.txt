@@ -1,0 +1,33 @@
+PACOTE DE PERFORMANCE NÍVEL 2
+
+O que foi implementado:
+- cache local do Django para dashboard e rastreabilidade
+- saldo disponível persistido em transactions.TraceLot.quantity_available
+- invalidação automática de cache quando entradas, saídas, transformações, lotes e fechamentos mudam
+- recalculo incremental do saldo disponível ao criar/remover alocações
+- paginação no relatório de rastreabilidade
+- comando de manutenção: python manage.py recalculate_lot_balances
+- comando técnico seguro: python manage.py cleanup_runtime_data
+
+Arquivos alterados:
+- config/settings.py
+- transactions/apps.py
+- transactions/models.py
+- transactions/services.py
+- transactions/signals.py
+- transactions/performance.py
+- transactions/management/commands/recalculate_lot_balances.py
+- transactions/management/commands/cleanup_runtime_data.py
+- transactions/migrations/0009_tracelot_available_balance_and_indexes.py
+- transactions/views.py
+- reports/views.py
+- templates/reports/traceability_report.html
+- templates/includes/pagination.html
+
+Depois de aplicar:
+1) python manage.py migrate
+2) python manage.py recalculate_lot_balances
+
+Observações:
+- cleanup_runtime_data remove apenas sessões técnicas antigas/expiradas; não apaga entradas, saídas, transformações, lotes ou rastreabilidade.
+- o cache é local em memória, sem custo extra.

@@ -65,7 +65,10 @@ def _lot_allocated_total(lot):
     return to_decimal(lot.allocations.aggregate(total=Sum('quantity_base'))['total'])
 
 def get_lot_remaining(lot):
-    return (to_decimal(lot.quantity_base) - _lot_allocated_total(lot)).quantize(Decimal('0.001'))
+    available = getattr(lot, 'quantity_available', None)
+    if available is None:
+        available = to_decimal(lot.quantity_base) - _lot_allocated_total(lot)
+    return to_decimal(available).quantize(Decimal('0.001'))
 
 def get_lot_remaining_for_sale(lot, sale=None):
     remaining = get_lot_remaining(lot)
@@ -89,7 +92,7 @@ def sync_entry_lot(entry):
     allocated = _lot_allocated_total(lot)
     if allocated > to_decimal(entry.quantity_base):
         raise ValueError(f'A entrada {entry.document_number} já possui {allocated} {entry.get_unit_snapshot_display()} rastreados. Não é possível reduzir abaixo desse valor.')
-    lot.participant = entry.participant; lot.product = entry.product; lot.source_type = 'entry'; lot.supplier = entry.supplier; lot.fsc_claim = entry.fsc_claim; lot.movement_date = entry.movement_date; lot.quantity_base = entry.quantity_base; lot.unit_snapshot = entry.unit_snapshot; lot.save()
+    lot.participant = entry.participant; lot.product = entry.product; lot.source_type = 'entry'; lot.supplier = entry.supplier; lot.fsc_claim = entry.fsc_claim; lot.movement_date = entry.movement_date; lot.quantity_base = entry.quantity_base; lot.quantity_available = (to_decimal(entry.quantity_base) - allocated).quantize(Decimal('0.001')); lot.unit_snapshot = entry.unit_snapshot; lot.save()
     return lot
 
 def sync_transformation_target_lot(transformation):
@@ -106,7 +109,7 @@ def sync_transformation_target_lot(transformation):
         raise ValueError('A transformação não pode consumir lotes de fornecedores diferentes.')
     inherited_supplier = source_allocations[0].lot.supplier if source_allocations and source_allocations[0].lot.supplier_id else None
     inherited_claim = source_claims[0] if len(source_claims) == 1 else ''
-    lot.participant = transformation.participant; lot.product = transformation.target_product; lot.source_type = 'transformation'; lot.supplier = inherited_supplier; lot.fsc_claim = inherited_claim; lot.movement_date = transformation.movement_date; lot.quantity_base = transformation.target_quantity_base; lot.unit_snapshot = transformation.target_unit_snapshot; lot.save()
+    lot.participant = transformation.participant; lot.product = transformation.target_product; lot.source_type = 'transformation'; lot.supplier = inherited_supplier; lot.fsc_claim = inherited_claim; lot.movement_date = transformation.movement_date; lot.quantity_base = transformation.target_quantity_base; lot.quantity_available = (to_decimal(transformation.target_quantity_base) - allocated).quantize(Decimal('0.001')); lot.unit_snapshot = transformation.target_unit_snapshot; lot.save()
     return lot
 
 def sync_transformation_metadata(transformation):
@@ -215,17 +218,26 @@ def reallocate_transformation_sources(transformation, preferred_lot=None):
     return allocate_quantity_to_lots(transformation.participant, transformation.source_product, transformation.source_quantity_base, transformation=transformation, preferred_lot=preferred_lot)
 
 def get_available_balance(participant, product, statuses=None):
-    lots = TraceLot.objects.filter(participant=participant, product=product); total = Decimal('0')
-    for lot in lots:
-        if lot.entry_id and statuses is not None and lot.entry.status not in statuses: continue
-        total += get_lot_remaining(lot)
+    lots = TraceLot.objects.filter(participant=participant, product=product)
+    if statuses is not None:
+        lots = lots.filter(models.Q(entry__isnull=True) | models.Q(entry__status__in=statuses))
+    total = to_decimal(lots.aggregate(total=Sum('quantity_available'))['total'])
     return total.quantize(Decimal('0.001'))
 
 def get_balance_items(participant, projected=False):
-    statuses = None if projected else ['reviewed']; items = []
-    for product in Product.objects.filter(active=True).order_by('name'):
-        available = get_available_balance(participant, product, statuses=statuses)
-        if available != 0: items.append({'product': product,'balance': available,'unit': product.get_unit_display(),'status_class': classify_balance(available)})
+    statuses = None if projected else ['reviewed']
+    lot_totals = TraceLot.objects.filter(participant=participant, product__active=True)
+    if statuses is not None:
+        lot_totals = lot_totals.filter(models.Q(entry__isnull=True) | models.Q(entry__status__in=statuses))
+    lot_totals = lot_totals.values('product_id', 'product__name', 'product__unit').annotate(balance=Sum('quantity_available')).order_by('product__name')
+    items = []
+    for row in lot_totals:
+        available = to_decimal(row['balance']).quantize(Decimal('0.001'))
+        if available == 0:
+            continue
+        product_stub = type('ProductStub', (), {'__str__': lambda self, name=row['product__name']: name})()
+        unit = UNIT_LABELS.get(row['product__unit'], row['product__unit'])
+        items.append({'product': product_stub, 'balance': available, 'unit': unit, 'status_class': classify_balance(available)})
     return items
 
 def classify_balance(value):
@@ -264,12 +276,15 @@ def describe_lot_origins(lot):
     return supplier_label, source_label
 
 def build_traceability_rows(participant=None, product=None):
-    allocations = LotAllocation.objects.select_related('participant', 'lot', 'lot__product', 'lot__supplier', 'sale', 'sale__customer', 'transformation', 'transformation__target_product').order_by('lot__movement_date', 'lot__id', 'id')
+    allocations = LotAllocation.objects.select_related('participant', 'lot', 'lot__product', 'lot__supplier', 'lot__entry', 'lot__transformation', 'sale', 'sale__customer', 'transformation', 'transformation__target_product').order_by('lot__movement_date', 'lot__id', 'id')
     if participant: allocations = allocations.filter(participant=participant)
     if product: allocations = allocations.filter(lot__product=product)
     rows = []
+    lot_origin_map = {}
     for allocation in allocations:
-        supplier_label, source_label = describe_lot_origins(allocation.lot)
+        if allocation.lot_id not in lot_origin_map:
+            lot_origin_map[allocation.lot_id] = describe_lot_origins(allocation.lot)
+        supplier_label, source_label = lot_origin_map[allocation.lot_id]
         if allocation.sale_id:
             use_type = 'saída'; use_label = f'Saída {allocation.sale.document_number}'; counterparty = str(allocation.sale.customer); destination_label = str(allocation.sale.product); use_date = allocation.sale.movement_date
         else:
@@ -278,14 +293,22 @@ def build_traceability_rows(participant=None, product=None):
     return rows
 
 def get_entry_balance_rows(participant=None):
-    lots = TraceLot.objects.select_related('participant', 'product', 'supplier', 'entry').filter(source_type='entry').order_by('movement_date', 'id')
+    lots = TraceLot.objects.select_related('participant', 'product', 'supplier', 'entry').prefetch_related('allocations__sale__customer').filter(source_type='entry').order_by('movement_date', 'id')
     if participant: lots = lots.filter(participant=participant)
     rows = []
     for lot in lots:
-        sales_total = to_decimal(lot.allocations.filter(target_type='sale').aggregate(total=Sum('quantity_base'))['total'])
-        transformations_total = to_decimal(lot.allocations.filter(target_type='transformation').aggregate(total=Sum('quantity_base'))['total'])
-        customers = ', '.join(sorted({str(a.sale.customer) for a in lot.allocations.select_related('sale__customer').filter(target_type='sale', sale__customer__isnull=False)}))
-        rows.append({'participant': lot.participant,'entry': lot.entry,'supplier': lot.supplier,'product': lot.product,'movement_date': lot.movement_date,'quantity_total': to_decimal(lot.quantity_base).quantize(Decimal('0.001')),'quantity_sold': sales_total.quantize(Decimal('0.001')),'quantity_transformed': transformations_total.quantize(Decimal('0.001')),'quantity_remaining': get_lot_remaining(lot),'unit': lot.product.get_unit_display(),'customers': customers})
+        sales_total = Decimal('0')
+        transformations_total = Decimal('0')
+        customers = set()
+        for allocation in lot.allocations.all():
+            qty = to_decimal(allocation.quantity_base)
+            if allocation.target_type == 'sale':
+                sales_total += qty
+                if getattr(allocation.sale, 'customer', None):
+                    customers.add(str(allocation.sale.customer))
+            else:
+                transformations_total += qty
+        rows.append({'participant': lot.participant,'entry': lot.entry,'supplier': lot.supplier,'product': lot.product,'movement_date': lot.movement_date,'quantity_total': to_decimal(lot.quantity_base).quantize(Decimal('0.001')),'quantity_sold': sales_total.quantize(Decimal('0.001')),'quantity_transformed': transformations_total.quantize(Decimal('0.001')),'quantity_remaining': get_lot_remaining(lot),'unit': lot.product.get_unit_display(),'customers': ', '.join(sorted(customers))})
     return rows
 
 def get_participant_alerts(participant, *, today=None):

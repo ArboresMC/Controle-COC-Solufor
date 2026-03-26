@@ -1,4 +1,6 @@
 from datetime import date
+from django.conf import settings
+from django.core.cache import cache
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
@@ -11,6 +13,7 @@ from compliance.models import MonthlyClosing
 from participants.models import Participant
 from .forms import EntryRecordForm, SaleRecordForm, TransformationRecordForm
 from .models import EntryRecord, SaleRecord, TransformationRecord
+from .performance import build_cache_key
 from .services import convert_to_base, get_available_balance, get_balance_items, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot
 
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
@@ -19,8 +22,17 @@ class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'dashboard.html'
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
+
+    def _get_scope(self):
+        user = self.request.user
+        current_org = getattr(user, 'current_organization', None)
+        if user.is_manager or user.is_auditor:
+            return 'organization', getattr(current_org, 'id', None), current_org
+        participant = getattr(user, 'participant', None)
+        return 'participant', getattr(participant, 'id', None), participant
+
+    def _build_dashboard_context(self):
+        ctx = {}
         user = self.request.user
         today = date.today()
         current_org = getattr(user, 'current_organization', None)
@@ -52,26 +64,41 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx['entries_total'] = month_entries.aggregate(total=Sum('quantity_base'))['total'] or 0
         ctx['sales_total'] = month_sales.aggregate(total=Sum('quantity_base'))['total'] or 0
         ctx['needs_correction'] = month_entries.filter(status='needs_correction').count() + month_sales.filter(status='needs_correction').count()
-        ctx['current_closings'] = closings
-        ctx['recent_entries'] = month_entries[:5]
-        ctx['recent_sales'] = month_sales[:5]
-        ctx['recent_transformations'] = transformations[:5]
+        ctx['current_closings'] = list(closings)
+        ctx['recent_entries'] = list(month_entries[:5])
+        ctx['recent_sales'] = list(month_sales[:5])
+        ctx['recent_transformations'] = list(transformations[:5])
         if user.is_manager:
             active_participants = Participant.objects.filter(status='active')
             active_participants = active_participants.filter(organization=current_org) if current_org else Participant.objects.none()
-            participant_summaries = [get_participant_balance_summary(p) for p in active_participants.order_by('trade_name', 'legal_name')[:8]]
+            active_participants = active_participants.order_by('trade_name', 'legal_name')
+            top_participants = list(active_participants[:8])
+            participant_summaries = [get_participant_balance_summary(p) for p in top_participants]
             closings_qs = MonthlyClosing.objects.filter(year=today.year, month=today.month)
             closings_qs = closings_qs.filter(participant__organization=current_org) if current_org else MonthlyClosing.objects.none()
-            ctx['manager_metrics'] = {'participants_active': active_participants.count(),'participants_without_closing': active_participants.exclude(id__in=closings_qs.values_list('participant_id', flat=True)).count(),'closings_submitted': closings_qs.filter(status='submitted').count(),'closings_rejected': closings_qs.filter(status='rejected').count(),'low_balance_participants': len([s for s in participant_summaries if s['low_count']]),}
+            participants_without = active_participants.exclude(id__in=closings_qs.values_list('participant_id', flat=True))
+            ctx['manager_metrics'] = {'participants_active': active_participants.count(),'participants_without_closing': participants_without.count(),'closings_submitted': closings_qs.filter(status='submitted').count(),'closings_rejected': closings_qs.filter(status='rejected').count(),'low_balance_participants': len([s for s in participant_summaries if s['low_count']]),}
             ctx['participant_summaries'] = participant_summaries
-            ctx['participants_without_closing'] = active_participants.exclude(id__in=closings_qs.values_list('participant_id', flat=True))[:10]
-            ctx['balance_items'] = []; ctx['projected_balance_items'] = []
+            ctx['participants_without_closing'] = list(participants_without[:10])
+            ctx['balance_items'] = []
+            ctx['projected_balance_items'] = []
             ctx['dashboard_alerts'] = get_manager_alerts(today=today, organization=current_org)
         else:
             participant = getattr(user, 'participant', None)
             ctx['balance_items'] = get_balance_items(participant, projected=False) if participant else []
             ctx['projected_balance_items'] = get_balance_items(participant, projected=True) if participant else []
             ctx['dashboard_alerts'] = get_participant_alerts(participant, today=today) if participant else []
+        return ctx
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        scope_type, scope_id, _ = self._get_scope()
+        cache_key = build_cache_key('dashboard', scope_type, scope_id, extra=date.today().isoformat())
+        cached = cache.get(cache_key)
+        if cached is None:
+            cached = self._build_dashboard_context()
+            cache.set(cache_key, cached, settings.CACHE_TTL_DASHBOARD)
+        ctx.update(cached)
         return ctx
 
 class ParticipantScopedMixin(LoginRequiredMixin):
@@ -83,19 +110,6 @@ class ParticipantScopedMixin(LoginRequiredMixin):
             return qs.filter(participant__organization=current_org) if current_org else qs.none()
         if user.participant: return qs.filter(participant=user.participant)
         return qs.none()
-
-
-
-class PaginatedListView(ListView):
-    paginate_by = 50
-
-    def get_paginate_by(self, queryset):
-        try:
-            per_page = int(self.request.GET.get('per_page', self.paginate_by))
-        except (TypeError, ValueError):
-            per_page = self.paginate_by
-        return per_page if per_page in {25, 50, 100} else self.paginate_by
-
 
 class DocumentCenterView(LoginRequiredMixin, TemplateView):
     template_name = 'transactions/document_center.html'
@@ -135,30 +149,20 @@ class DocumentCenterView(LoginRequiredMixin, TemplateView):
         ctx['transformation_docs'] = self._filter_docs(transformation_qs).order_by('-movement_date', '-id')[:100]
         return ctx
 
-class EntryListView(ParticipantScopedMixin, PaginatedListView):
+class EntryListView(ParticipantScopedMixin, ListView):
     model = EntryRecord; template_name = 'transactions/entry_list.html'; context_object_name = 'records'
 
-    def get_queryset(self):
-        return super().get_queryset().order_by('-movement_date', '-id')
-
-class SaleListView(ParticipantScopedMixin, PaginatedListView):
+class SaleListView(ParticipantScopedMixin, ListView):
     model = SaleRecord; template_name = 'transactions/sale_list.html'; context_object_name = 'records'
 
-    def get_queryset(self):
-        return super().get_queryset().order_by('-movement_date', '-id')
-
-class TransformationListView(LoginRequiredMixin, PaginatedListView):
+class TransformationListView(LoginRequiredMixin, ListView):
     model = TransformationRecord; template_name = 'transactions/transformation_list.html'; context_object_name = 'records'
     def get_queryset(self):
         qs = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
         user = self.request.user; current_org = getattr(user, 'current_organization', None)
-        if user.is_manager or user.is_auditor:
-            qs = qs.filter(participant__organization=current_org) if current_org else qs.none()
-        elif user.participant:
-            qs = qs.filter(participant=user.participant)
-        else:
-            qs = qs.none()
-        return qs.order_by('-movement_date', '-id')
+        if user.is_manager or user.is_auditor: return qs.filter(participant__organization=current_org) if current_org else qs.none()
+        if user.participant: return qs.filter(participant=user.participant)
+        return qs.none()
 
 class EntryCreateView(LoginRequiredMixin, CreateView):
     model = EntryRecord; form_class = EntryRecordForm; template_name = 'transactions/form.html'; success_url = reverse_lazy('entry_list')
@@ -278,16 +282,14 @@ class TransformationUpdateView(TransformationCreateView, UpdateView):
             form.add_error('source_lot', str(exc)); return self.form_invalid(form)
         messages.success(self.request, 'Transformação atualizada com sucesso.'); return redirect(self.success_url)
 
-class ManagerReviewEntryListView(ManagerRequiredMixin, PaginatedListView):
+class ManagerReviewEntryListView(ManagerRequiredMixin, ListView):
     model = EntryRecord; template_name = 'transactions/review_list.html'; context_object_name = 'records'
     def get_queryset(self):
         org = getattr(self.request.user, 'current_organization', None)
-        qs = EntryRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else EntryRecord.objects.none()
-        return qs.order_by('-movement_date', '-id')
+        return EntryRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else EntryRecord.objects.none()
 
-class ManagerReviewSaleListView(ManagerRequiredMixin, PaginatedListView):
+class ManagerReviewSaleListView(ManagerRequiredMixin, ListView):
     model = SaleRecord; template_name = 'transactions/review_list.html'; context_object_name = 'records'
     def get_queryset(self):
         org = getattr(self.request.user, 'current_organization', None)
-        qs = SaleRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else SaleRecord.objects.none()
-        return qs.order_by('-movement_date', '-id')
+        return SaleRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else SaleRecord.objects.none()

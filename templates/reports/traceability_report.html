@@ -29,14 +29,8 @@
     </tr>
     {% endfor %}
   </table></div>
+  {% include 'includes/pagination.html' with page_obj=rows_page_obj query_string=rows_query_string page_param='page' %}
   {% else %}<div class="empty-state">Nenhum vínculo de rastreabilidade encontrado.</div>{% endif %}
-  {% if rows_page_obj and rows_page_obj.has_other_pages %}
-    {% if selected_participant %}
-      {% with is_paginated=True page_obj=rows_page_obj pagination_base='?page=' pagination_suffix='&participant='|add:selected_participant.id|stringformat:'s' %}{% include 'includes/pagination.html' %}{% endwith %}
-    {% else %}
-      {% with is_paginated=True page_obj=rows_page_obj pagination_base='?page=' pagination_suffix='' %}{% include 'includes/pagination.html' %}{% endwith %}
-    {% endif %}
-  {% endif %}
 </div>
 
 <div class="card">
@@ -60,13 +54,7 @@
     </tr>
     {% endfor %}
   </table></div>
+  {% include 'includes/pagination.html' with page_obj=balances_page_obj query_string=balances_query_string page_param='balance_page' %}
   {% else %}<div class="empty-state">Nenhuma entrada rastreável encontrada.</div>{% endif %}
-  {% if entry_balances_page_obj and entry_balances_page_obj.has_other_pages %}
-    {% if selected_participant %}
-      {% with is_paginated=True page_obj=entry_balances_page_obj pagination_base='?balances_page=' pagination_suffix='&participant='|add:selected_participant.id|stringformat:'s' %}{% include 'includes/pagination.html' %}{% endwith %}
-    {% else %}
-      {% with is_paginated=True page_obj=entry_balances_page_obj pagination_base='?balances_page=' pagination_suffix='' %}{% include 'includes/pagination.html' %}{% endwith %}
-    {% endif %}
-  {% endif %}
 </div>
 {% endblock %}
