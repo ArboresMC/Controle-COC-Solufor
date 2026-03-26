@@ -1,5 +1,54 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  .import-note {
+    display: none;
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 110, 145, .14);
+    background: #eef8fc;
+    color: #0b6280;
+    font-weight: 600;
+  }
+
+  .import-note.is-visible {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .import-spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 2px solid rgba(11, 98, 128, .18);
+    border-top-color: #0b6280;
+    animation: import-spin .8s linear infinite;
+    flex: 0 0 18px;
+  }
+
+  @keyframes import-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .actions.is-busy .btn {
+    pointer-events: none;
+    opacity: .78;
+  }
+
+  .actions .btn[disabled] {
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  .import-hint {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+</style>
+
 <div class="split">
   <div class="card">
     <div class="card-header">
@@ -10,15 +59,31 @@
       </div>
       <a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a>
     </div>
-    <form method="post" enctype="multipart/form-data">
+
+    <form method="post" enctype="multipart/form-data" id="import-form">
       {% csrf_token %}
       {{ form.as_p }}
-      <div class="actions">
-        <button class="btn secondary" type="submit" name="action" value="validate">Validar planilha</button>
-        <button class="btn" type="submit" name="action" value="import">Importar planilha</button>
+
+      <div class="actions" id="import-actions">
+        <button class="btn secondary" type="submit" name="action" value="validate" data-idle-label="Validar planilha" data-busy-label="Validando...">
+          <span class="btn-label">Validar planilha</span>
+        </button>
+        <button class="btn" type="submit" name="action" value="import" data-idle-label="Importar planilha" data-busy-label="Importando...">
+          <span class="btn-label">Importar planilha</span>
+        </button>
+      </div>
+
+      <div class="import-note" id="import-note" aria-live="polite">
+        <span class="import-spinner" aria-hidden="true"></span>
+        <span id="import-note-text">Processando arquivo. Não feche nem atualize esta página até a conclusão.</span>
+      </div>
+
+      <div class="import-hint">
+        Arquivos grandes podem levar alguns minutos para concluir.
       </div>
     </form>
   </div>
+
   <div class="card soft">
     <div class="stack">
       <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes da importação.</span></div>
@@ -48,4 +113,71 @@
   </div>
 </div>
 {% endif %}
+
+<script>
+  (function () {
+    const form = document.getElementById('import-form');
+    const actions = document.getElementById('import-actions');
+    const note = document.getElementById('import-note');
+    const noteText = document.getElementById('import-note-text');
+
+    if (!form || !actions || !note || !noteText) return;
+
+    let busy = false;
+
+    function setBusy(button) {
+      if (busy) return false;
+      busy = true;
+
+      const action = button?.value || '';
+      const isImport = action === 'import';
+      const isValidate = action === 'validate';
+
+      actions.classList.add('is-busy');
+      note.classList.add('is-visible');
+
+      if (isImport) {
+        noteText.textContent = 'Importando planilha. Não feche nem atualize esta página até a conclusão.';
+      } else if (isValidate) {
+        noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
+      } else {
+        noteText.textContent = 'Processando arquivo. Não feche nem atualize esta página até a conclusão.';
+      }
+
+      actions.querySelectorAll('button').forEach((btn) => {
+        btn.disabled = true;
+        const label = btn.querySelector('.btn-label');
+        if (label) {
+          label.textContent = btn.dataset.busyLabel || 'Processando...';
+        }
+      });
+
+      if (button) {
+        button.disabled = false;
+        const label = button.querySelector('.btn-label');
+        if (label) {
+          label.textContent = button.dataset.busyLabel || 'Processando...';
+        }
+      }
+
+      return true;
+    }
+
+    actions.querySelectorAll('button[type="submit"]').forEach((button) => {
+      button.addEventListener('click', function () {
+        actions.querySelectorAll('button[type="submit"]').forEach((btn) => {
+          delete btn.dataset.clicked;
+        });
+        this.dataset.clicked = '1';
+      });
+    });
+
+    form.addEventListener('submit', function (event) {
+      const clickedButton = actions.querySelector('button[data-clicked="1"]') || document.activeElement;
+      if (!setBusy(clickedButton)) {
+        event.preventDefault();
+      }
+    });
+  })();
+</script>
 {% endblock %}
