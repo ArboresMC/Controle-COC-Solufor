@@ -57,7 +57,7 @@
         <h2 class="card-title">Validar e importar planilha</h2>
         <p class="card-subtitle">Envie a planilha no modelo oficial. O sistema valida linha por linha antes de importar.</p>
       </div>
-      <a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a>
+      <a class="btn secondary" href="/reports/import-template.xlsx" id="template-download-link">Baixar modelo</a>
     </div>
 
     <form method="post" enctype="multipart/form-data" id="import-form">
@@ -86,10 +86,9 @@
 
   <div class="card soft">
     <div class="stack">
-      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo, dados obrigatórios e a origem manual informada por id_lote_origem antes da importação.</span></div>
+      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes da importação.</span></div>
       <div class="info-box"><strong>Cadastro automático</strong><br><span class="muted">Produtos, clientes e fornecedores podem ser criados automaticamente conforme o arquivo.</span></div>
-      <div class="info-box"><strong>Planilha modelo</strong><br><span class="muted">Use as abas Entradas, Saidas e Transformacoes do modelo oficial. Para travar a origem sem ambiguidade, preencha id_lote_origem.</span></div>
-      <div class="info-box"><strong>Origem manual inequívoca</strong><br><span class="muted">Saídas e transformações agora aceitam id_lote_origem. Se houver mais de uma origem, separe ids e quantidades com ;.</span></div>
+      <div class="info-box"><strong>Planilha modelo</strong><br><span class="muted">O download agora inclui a aba Lotes Disponiveis com os IDs de lote para seleção na importação.</span></div>
     </div>
   </div>
 </div>
@@ -121,10 +120,28 @@
     const actions = document.getElementById('import-actions');
     const note = document.getElementById('import-note');
     const noteText = document.getElementById('import-note-text');
+    const templateDownloadLink = document.getElementById('template-download-link');
+    const participantField = document.getElementById('id_participant');
 
     if (!form || !actions || !note || !noteText) return;
 
     let busy = false;
+
+    function syncTemplateLink() {
+      if (!templateDownloadLink) return;
+      const url = new URL(templateDownloadLink.getAttribute('href'), window.location.origin);
+      if (participantField && participantField.value) {
+        url.searchParams.set('participant', participantField.value);
+      } else {
+        url.searchParams.delete('participant');
+      }
+      templateDownloadLink.setAttribute('href', url.pathname + url.search);
+    }
+
+    syncTemplateLink();
+    if (participantField) {
+      participantField.addEventListener('change', syncTemplateLink);
+    }
 
     function setBusy(button) {
       if (busy) return false;

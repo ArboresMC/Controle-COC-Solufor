@@ -5,6 +5,7 @@ from django.db import transaction
 from io import BytesIO
 
 import openpyxl
+from openpyxl.worksheet.datavalidation import DataValidation
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
@@ -19,20 +20,20 @@ from django.views import View
 
 from catalog.models import Counterparty, Product
 from participants.models import Participant
-from transactions.models import EntryRecord, SaleRecord, TransformationRecord, TraceLot, LotAllocation
+from transactions.models import EntryRecord, LotAllocation, SaleRecord, TraceLot, TransformationRecord
 from transactions.services import (
     build_traceability_rows,
     calculate_target_from_source,
     convert_to_base,
     get_entry_balance_rows,
+    get_lot_remaining_for_sale,
+    get_lot_remaining_for_transformation,
     get_transformation_rule,
     reallocate_sale,
     reallocate_transformation_sources,
     sync_entry_lot,
     sync_transformation_metadata,
     sync_transformation_target_lot,
-    get_lot_remaining_for_sale,
-    get_lot_remaining_for_transformation,
 )
 from .forms import ImportWorkbookForm
 
@@ -61,6 +62,178 @@ def _normalize_header(value):
     return text.lower().replace(' ', '_')
 
 
+
+
+def _parse_multi_value(value):
+    text = _safe_str(value)
+    if not text:
+        return []
+    return [item.strip() for item in text.split(';') if item is not None and str(item).strip()]
+
+
+def _get_lot_by_identifier(participant, product, *, lot_id=None, document_number=None, batch_code=None, allowed_source_types=None):
+    qs = TraceLot.objects.select_related('entry', 'transformation', 'product', 'supplier').filter(participant=participant, product=product)
+    if allowed_source_types:
+        qs = qs.filter(source_type__in=allowed_source_types)
+    if lot_id not in (None, ''):
+        try:
+            return qs.get(pk=int(str(lot_id).strip()))
+        except Exception:
+            raise ValueError(f'Lote de origem com ID {lot_id} não foi encontrado para o produto informado.')
+
+    document_number = _safe_str(document_number)
+    batch_code = _safe_str(batch_code)
+    if not document_number and not batch_code:
+        raise ValueError('Informe id_lote_origem ou documento_origem/lote_origem.')
+
+    matches = []
+    for lot in qs:
+        lot_doc = ''
+        lot_batch = ''
+        if lot.entry_id:
+            lot_doc = _safe_str(lot.entry.document_number)
+            lot_batch = _safe_str(lot.entry.batch_code)
+        elif lot.transformation_id:
+            lot_doc = _safe_str(lot.transformation.document_number)
+        if document_number and lot_doc != document_number:
+            continue
+        if batch_code and lot_batch != batch_code:
+            continue
+        matches.append(lot)
+
+    if not matches:
+        raise ValueError('Não foi encontrado lote compatível com a origem informada.')
+    if len(matches) > 1:
+        raise ValueError('Origem ambígua. Use id_lote_origem para identificar o lote exatamente.')
+    return matches[0]
+
+
+def _build_manual_lot_specs(row, *, require_quantities=False):
+    lot_ids = _parse_multi_value(_first_present(row, 'id_lote_origem'))
+    source_types = _parse_multi_value(_first_present(row, 'origem_tipo'))
+    documents = _parse_multi_value(_first_present(row, 'documento_origem'))
+    batches = _parse_multi_value(_first_present(row, 'lote_origem'))
+    quantities = _parse_multi_value(_first_present(row, 'quantidade_origem'))
+
+    item_count = max(len(lot_ids), len(source_types), len(documents), len(batches), len(quantities))
+    if item_count == 0:
+        return []
+
+    if require_quantities and len(quantities) != item_count:
+        raise ValueError('Quando informar origem manual, preencha quantidade_origem para todas as origens.')
+
+    specs = []
+    for index in range(item_count):
+        specs.append({
+            'lot_id': lot_ids[index] if index < len(lot_ids) else '',
+            'source_type': (source_types[index] if index < len(source_types) else '').lower(),
+            'document_number': documents[index] if index < len(documents) else '',
+            'batch_code': batches[index] if index < len(batches) else '',
+            'quantity_base': _decimal(quantities[index]) if index < len(quantities) else Decimal('0'),
+        })
+
+    return specs
+
+
+def _resolve_manual_lots(participant, product, specs, *, sale=None, transformation=None, allowed_source_types=None):
+    resolved = []
+    total = Decimal('0')
+    for spec in specs:
+        lot = _get_lot_by_identifier(
+            participant,
+            product,
+            lot_id=spec.get('lot_id'),
+            document_number=spec.get('document_number'),
+            batch_code=spec.get('batch_code'),
+            allowed_source_types=allowed_source_types,
+        )
+        declared_source_type = _safe_str(spec.get('source_type')).lower()
+        if declared_source_type and declared_source_type != lot.source_type:
+            raise ValueError(f'O lote {lot.id} é do tipo {lot.source_type}, diferente do origem_tipo informado.')
+        quantity_base = _decimal(spec.get('quantity_base'))
+        remaining = get_lot_remaining_for_sale(lot, sale=sale) if sale is not None else get_lot_remaining_for_transformation(lot, transformation=transformation)
+        if quantity_base <= 0:
+            raise ValueError(f'Informe quantidade_origem maior que zero para o lote {lot.id}.')
+        if remaining < quantity_base:
+            raise ValueError(f'Lote {lot.id} sem saldo suficiente. Disponível: {remaining}. Solicitado: {quantity_base}.')
+        resolved.append((lot, quantity_base))
+        total += quantity_base
+    return resolved, total.quantize(Decimal('0.001'))
+
+
+def _apply_manual_sale_allocations(sale, resolved_allocations):
+    sale.lot_allocations.all().delete()
+    selected_supplier = None
+    selected_claim = ''
+    for lot, quantity_base in resolved_allocations:
+        lot_claim = (lot.fsc_claim or '').strip()
+        if selected_supplier is None:
+            selected_supplier = lot.supplier
+        elif lot.supplier_id != getattr(selected_supplier, 'id', None):
+            raise ValueError('A saída não pode consumir lotes de fornecedores diferentes.')
+        if selected_claim and lot_claim != selected_claim:
+            raise ValueError('A saída não pode consumir lotes com declarações FSC diferentes.')
+        if not selected_claim:
+            selected_claim = lot_claim
+        LotAllocation.objects.create(
+            participant=sale.participant,
+            lot=lot,
+            sale=sale,
+            target_type='sale',
+            quantity_base=quantity_base.quantize(Decimal('0.001')),
+        )
+    sale.supplier = selected_supplier
+    sale.fsc_claim = selected_claim or sale.fsc_claim
+    sale.save(update_fields=['supplier', 'fsc_claim'])
+
+
+def _apply_manual_transformation_allocations(transformation, resolved_allocations):
+    transformation.source_lot_allocations.all().delete()
+    for lot, quantity_base in resolved_allocations:
+        LotAllocation.objects.create(
+            participant=transformation.participant,
+            lot=lot,
+            transformation=transformation,
+            target_type='transformation',
+            quantity_base=quantity_base.quantize(Decimal('0.001')),
+        )
+    sync_transformation_metadata(transformation)
+    sync_transformation_target_lot(transformation)
+
+
+def _get_available_import_lots(participant):
+    if not participant:
+        return []
+    lots = (
+        TraceLot.objects
+        .select_related('product', 'supplier', 'entry', 'transformation', 'transformation__source_product')
+        .filter(participant=participant)
+        .order_by('movement_date', 'id')
+    )
+    items = []
+    for lot in lots:
+        remaining = get_lot_remaining_for_transformation(lot) if lot.source_type == 'entry' else get_lot_remaining_for_sale(lot)
+        if remaining <= 0:
+            continue
+        document_number = _safe_str(lot.entry.document_number if lot.entry_id else lot.transformation.document_number if lot.transformation_id else '')
+        batch_code = _safe_str(lot.entry.batch_code) if lot.entry_id else ''
+        usage_hint = 'saida/transformacao' if lot.source_type == 'entry' else 'saida'
+        items.append({
+            'id': lot.id,
+            'source_type': lot.source_type,
+            'usage_hint': usage_hint,
+            'document_number': document_number,
+            'batch_code': batch_code,
+            'product': lot.product.name,
+            'remaining': remaining.quantize(Decimal('0.001')),
+            'unit': lot.product.get_unit_display(),
+            'supplier': str(lot.supplier) if lot.supplier_id else '',
+            'movement_date': lot.movement_date,
+            'fsc_claim': _safe_str(lot.fsc_claim),
+            'label': lot.label,
+        })
+    return items
+
 def _sheet_rows(sheet):
     headers = [_normalize_header(cell) for cell in next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), [])]
     for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
@@ -80,192 +253,6 @@ def _first_present(row, *keys):
             return row.get(key)
     return None
 
-
-
-
-def _split_multi_value(value):
-    raw = _safe_str(value)
-    if not raw:
-        return []
-    return [item.strip() for item in raw.split(';') if item is not None and str(item).strip() != '']
-
-
-def _parse_manual_origin_spec(row):
-    lot_ids = _split_multi_value(_first_present(row, 'id_lote_origem'))
-    lot_codes = _split_multi_value(_first_present(row, 'lote_origem'))
-    documents = _split_multi_value(_first_present(row, 'documento_origem'))
-    quantities = _split_multi_value(_first_present(row, 'quantidade_origem'))
-    origin_types = [item.lower() for item in _split_multi_value(_first_present(row, 'origem_tipo'))]
-
-    lengths = [len(items) for items in [lot_ids, lot_codes, documents, quantities, origin_types] if items]
-    if not lengths:
-        return []
-    count = max(lengths)
-    for items, label in [
-        (lot_ids, 'id_lote_origem'),
-        (lot_codes, 'lote_origem'),
-        (documents, 'documento_origem'),
-        (quantities, 'quantidade_origem'),
-        (origin_types, 'origem_tipo'),
-    ]:
-        if items and len(items) not in (1, count):
-            raise ValueError(f'Quantidade de itens inconsistente na coluna {label}.')
-
-    def expand(items):
-        if not items:
-            return [''] * count
-        if len(items) == 1 and count > 1:
-            return items * count
-        return items
-
-    items = []
-    for idx in range(count):
-        item = {
-            'lot_id': expand(lot_ids)[idx],
-            'lot_code': expand(lot_codes)[idx],
-            'document_number': expand(documents)[idx],
-            'quantity': expand(quantities)[idx],
-            'origin_type': expand(origin_types)[idx],
-        }
-        if not any(item.values()):
-            continue
-        if not item['quantity']:
-            raise ValueError('Informe quantidade_origem para cada origem manual.')
-        items.append(item)
-    return items
-
-
-def _find_trace_lot_for_import(participant, product, spec, *, allow_transformation_sources=True):
-    qs = TraceLot.objects.filter(participant=participant, product=product)
-    if not allow_transformation_sources:
-        qs = qs.filter(source_type='entry')
-
-    lot_id = _safe_str(spec.get('lot_id'))
-    if lot_id:
-        try:
-            return qs.select_related('entry', 'transformation', 'supplier', 'product').get(pk=int(lot_id))
-        except (ValueError, TraceLot.DoesNotExist):
-            raise ValueError(f'id_lote_origem inválido ou inexistente: {lot_id}.')
-
-    doc = _safe_str(spec.get('document_number'))
-    lot_code = _safe_str(spec.get('lot_code'))
-    origin_type = _safe_str(spec.get('origin_type')).lower()
-
-    if origin_type and origin_type not in {'entry', 'transformation'}:
-        raise ValueError(f'origem_tipo inválido: {origin_type}. Use entry ou transformation.')
-    if origin_type:
-        qs = qs.filter(source_type=origin_type)
-    if lot_code:
-        qs = qs.filter(entry__batch_code=lot_code) | qs.filter(transformation__batch_code=lot_code)
-    if doc:
-        qs = qs.filter(entry__document_number=doc) | qs.filter(transformation__document_number=doc)
-
-    matches = list(qs.select_related('entry', 'transformation', 'supplier', 'product').distinct())
-    if not matches:
-        raise ValueError('Nenhum lote de origem encontrado com os critérios informados.')
-    if len(matches) > 1:
-        ids = ', '.join(str(item.id) for item in matches[:10])
-        raise ValueError(f'Origem ambígua. Informe id_lote_origem. Lotes candidatos: {ids}.')
-    return matches[0]
-
-
-def _resolve_manual_origin_allocations(participant, product, row, *, allow_transformation_sources=True):
-    specs = _parse_manual_origin_spec(row)
-    allocations = []
-    for spec in specs:
-        lot = _find_trace_lot_for_import(
-            participant,
-            product,
-            spec,
-            allow_transformation_sources=allow_transformation_sources,
-        )
-        qty = _decimal(spec.get('quantity'))
-        if qty <= 0:
-            raise ValueError('quantidade_origem deve ser maior que zero.')
-        allocations.append({'lot': lot, 'quantity_base': qty.quantize(Decimal('0.001'))})
-    return allocations
-
-
-def _validate_manual_allocations_total(allocations, expected_quantity_base):
-    total = sum((item['quantity_base'] for item in allocations), Decimal('0'))
-    total = total.quantize(Decimal('0.001'))
-    expected = _decimal(expected_quantity_base).quantize(Decimal('0.001'))
-    if total != expected:
-        raise ValueError(f'A soma de quantidade_origem ({total}) deve ser igual à quantidade da linha ({expected}).')
-
-
-def _apply_manual_sale_allocations(sale, allocations):
-    if not allocations:
-        return reallocate_sale(sale)
-    sale.lot_allocations.all().delete()
-    selected_supplier = None
-    selected_claim = None
-    remaining_map = {}
-
-    for item in allocations:
-        lot = item['lot']
-        quantity_base = item['quantity_base']
-        if lot.participant_id != sale.participant_id or lot.product_id != sale.product_id:
-            raise ValueError('O lote informado não pertence ao participante/produto da saída.')
-        remaining = remaining_map.get(lot.id)
-        if remaining is None:
-            remaining = get_lot_remaining_for_sale(lot, sale=sale)
-        if quantity_base > remaining:
-            raise ValueError(f'Lote #{lot.id} sem saldo suficiente. Disponível: {remaining}.')
-        if selected_supplier is None:
-            selected_supplier = lot.supplier
-        elif lot.supplier_id != getattr(selected_supplier, 'id', None):
-            raise ValueError('A saída não pode consumir lotes de fornecedores diferentes.')
-        lot_claim = (lot.fsc_claim or '').strip()
-        if selected_claim is None:
-            selected_claim = lot_claim
-        elif lot_claim != selected_claim:
-            raise ValueError('A saída não pode consumir lotes com declarações FSC diferentes.')
-        LotAllocation.objects.create(
-            participant=sale.participant,
-            lot=lot,
-            sale=sale,
-            target_type='sale',
-            quantity_base=quantity_base,
-        )
-        remaining_map[lot.id] = (remaining - quantity_base).quantize(Decimal('0.001'))
-
-    sale.supplier = selected_supplier
-    sale.fsc_claim = selected_claim or ''
-    sale.save(update_fields=['supplier', 'fsc_claim'])
-
-
-def _apply_manual_transformation_allocations(transformation, allocations):
-    if not allocations:
-        reallocate_transformation_sources(transformation)
-        sync_transformation_target_lot(transformation)
-        return
-    transformation.source_lot_allocations.all().delete()
-    remaining_map = {}
-
-    for item in allocations:
-        lot = item['lot']
-        quantity_base = item['quantity_base']
-        if lot.participant_id != transformation.participant_id or lot.product_id != transformation.source_product_id:
-            raise ValueError('O lote informado não pertence ao participante/produto de origem da transformação.')
-        if lot.source_type != 'entry':
-            raise ValueError('Transformações só podem consumir lotes de entrada.')
-        remaining = remaining_map.get(lot.id)
-        if remaining is None:
-            remaining = get_lot_remaining_for_transformation(lot, transformation=transformation)
-        if quantity_base > remaining:
-            raise ValueError(f'Lote #{lot.id} sem saldo suficiente. Disponível: {remaining}.')
-        LotAllocation.objects.create(
-            participant=transformation.participant,
-            lot=lot,
-            transformation=transformation,
-            target_type='transformation',
-            quantity_base=quantity_base,
-        )
-        remaining_map[lot.id] = (remaining - quantity_base).quantize(Decimal('0.001'))
-
-    sync_transformation_metadata(transformation)
-    sync_transformation_target_lot(transformation)
 
 def _coerce_product(product_name, *, default_unit=None, create_if_missing=False):
     product_name = _safe_str(product_name)
@@ -375,9 +362,19 @@ def _build_import_preview(workbook, participant, user, persist=False):
                 quantidade = _decimal(quantidade)
                 unidade = _safe_str(unidade) or product.unit
                 quantity_base = convert_to_base(product, quantidade, unidade)
-                manual_allocations = _resolve_manual_origin_allocations(participant, product, row, allow_transformation_sources=True)
-                if manual_allocations:
-                    _validate_manual_allocations_total(manual_allocations, quantity_base)
+                manual_specs = _build_manual_lot_specs(row, require_quantities=False)
+                manual_lots = []
+                if manual_specs:
+                    manual_lots, manual_total = _resolve_manual_lots(
+                        participant,
+                        product,
+                        manual_specs,
+                        sale=None,
+                        allowed_source_types=['entry', 'transformation'],
+                    )
+                    if manual_total != quantity_base:
+                        raise ValueError(f'A soma de quantidade_origem ({manual_total}) difere da quantidade da saída ({quantity_base}).')
+
                 preview = {
                     'linha': idx,
                     'data': data,
@@ -387,14 +384,7 @@ def _build_import_preview(workbook, participant, user, persist=False):
                     'quantity': quantidade,
                     'unit': unidade,
                     'quantity_base': quantity_base,
-                    'manual_sources': [
-                        {
-                            'lot_id': item['lot'].id,
-                            'lot_label': item['lot'].label,
-                            'quantity_base': item['quantity_base'],
-                        }
-                        for item in manual_allocations
-                    ],
+                    'manual_lots': [f"#{lot.id} {lot.label} ({qty})" for lot, qty in manual_lots],
                 }
                 previews['sales'].append(preview)
                 summary['sales'] += 1
@@ -415,7 +405,10 @@ def _build_import_preview(workbook, participant, user, persist=False):
                         created_by=user,
                         status='submitted',
                     )
-                    _apply_manual_sale_allocations(obj, manual_allocations)
+                    if manual_lots:
+                        _apply_manual_sale_allocations(obj, manual_lots)
+                    else:
+                        reallocate_sale(obj)
             except Exception as exc:
                 errors.append(f'Saidas linha {idx}: {exc}')
 
@@ -449,9 +442,19 @@ def _build_import_preview(workbook, participant, user, persist=False):
                 if not rule.yield_factor:
                     raise ValueError('A regra de transformação está com fator de rendimento inválido.')
                 source_quantity_base = (target_quantity_base / Decimal(str(rule.yield_factor))).quantize(Decimal('0.001'))
-                manual_allocations = _resolve_manual_origin_allocations(participant, source_product, row, allow_transformation_sources=False)
-                if manual_allocations:
-                    _validate_manual_allocations_total(manual_allocations, source_quantity_base)
+
+                manual_specs = _build_manual_lot_specs(row, require_quantities=False)
+                manual_lots = []
+                if manual_specs:
+                    manual_lots, manual_total = _resolve_manual_lots(
+                        participant,
+                        source_product,
+                        manual_specs,
+                        transformation=None,
+                        allowed_source_types=['entry'],
+                    )
+                    if manual_total != source_quantity_base:
+                        raise ValueError(f'A soma de quantidade_origem ({manual_total}) difere do consumo calculado da origem ({source_quantity_base}).')
 
                 preview = {
                     'linha': idx,
@@ -466,14 +469,7 @@ def _build_import_preview(workbook, participant, user, persist=False):
                     'target_unit': target_unit,
                     'target_quantity_base': target_quantity_base,
                     'yield_factor': rule.yield_factor,
-                    'manual_sources': [
-                        {
-                            'lot_id': item['lot'].id,
-                            'lot_label': item['lot'].label,
-                            'quantity_base': item['quantity_base'],
-                        }
-                        for item in manual_allocations
-                    ],
+                    'manual_lots': [f"#{lot.id} {lot.label} ({qty})" for lot, qty in manual_lots],
                 }
                 previews['transformations'].append(preview)
                 summary['transformations'] += 1
@@ -495,7 +491,11 @@ def _build_import_preview(workbook, participant, user, persist=False):
                         notes=_safe_str(observacoes),
                         created_by=user,
                     )
-                    _apply_manual_transformation_allocations(obj, manual_allocations)
+                    if manual_lots:
+                        _apply_manual_transformation_allocations(obj, manual_lots)
+                    else:
+                        reallocate_transformation_sources(obj)
+                        sync_transformation_target_lot(obj)
             except Exception as exc:
                 errors.append(f'Transformacoes linha {idx}: {exc}')
 
@@ -614,18 +614,75 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
 
 class ImportTemplateDownloadView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
+        participant = None
+        participant_id = request.GET.get('participant')
+        if request.user.is_manager:
+            if participant_id:
+                participant = Participant.objects.filter(pk=participant_id).first()
+        else:
+            participant = getattr(request.user, 'participant', None)
+
         wb = openpyxl.Workbook()
         ws1 = wb.active
         ws1.title = 'Entradas'
         ws1.append(['data', 'documento', 'fornecedor', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'observacoes'])
         ws1.append(['2026-03-18', 'NF-ENT-001', 'Fornecedor Exemplo', 'Toras e Toretes 100%', 10, 't', 'FSC 100%', 'L001', 'Exemplo'])
+
         ws2 = wb.create_sheet('Saidas')
         ws2.append(['data', 'documento', 'cliente', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'id_lote_origem', 'origem_tipo', 'documento_origem', 'lote_origem', 'quantidade_origem', 'observacoes'])
-        ws2.append(['2026-03-18', 'NF-SAI-001', 'Cliente Exemplo', 'Madeira Serrada 100%', 2, 'm3', 'FSC 100%', 'L001', '15', 'entry', 'NF-ENT-001', 'L001', '2.000', 'Use id_lote_origem quando quiser travar a origem de forma inequívoca.'])
-        ws2.append(['2026-03-18', 'NF-SAI-002', 'Cliente Exemplo', 'Madeira Serrada 100%', 3, 'm3', 'FSC 100%', 'L002', '15;18', 'entry;transformation', 'NF-ENT-001;TRF-004', 'L001;LT-TRF-004', '1.500;1.500', 'Também aceita múltiplas origens separadas por ;'])
+        ws2.append(['2026-03-18', 'NF-SAI-001', 'Cliente Exemplo', 'Madeira Serrada 100%', 2, 'm3', 'FSC 100%', 'L-SAI-001', '15', 'entry', 'NF-ENT-001', 'L001', 2, 'Pode informar múltiplas origens separadas por ;'])
+
         ws3 = wb.create_sheet('Transformacoes')
-        ws3.append(['data', 'documento', 'cliente_final', 'produto_origem', 'produto_destino', 'quantidade_produzida', 'unidade_destino', 'id_lote_origem', 'documento_origem', 'lote_origem', 'quantidade_origem', 'observacoes'])
-        ws3.append(['2026-03-18', 'TRF-001', 'Cliente Exemplo', 'Toras e Toretes 100%', 'Madeira Serrada 100%', 5, 'm3', '11', 'NF-ENT-001', 'L001', '10.000', 'Use id_lote_origem para travar a origem; se ficar em branco, o sistema usa FIFO automático.'])
+        ws3.append(['data', 'documento', 'cliente_final', 'produto_origem', 'produto_destino', 'quantidade_produzida', 'unidade_destino', 'id_lote_origem', 'origem_tipo', 'documento_origem', 'lote_origem', 'quantidade_origem', 'observacoes'])
+        ws3.append(['2026-03-18', 'TRF-001', 'Cliente Exemplo', 'Toras e Toretes 100%', 'Madeira Serrada 100%', 5, 'm3', '11', 'entry', 'NF-ENT-001', 'L001', 10, 'Informe a produção final; o sistema calcula automaticamente o consumo da origem.'])
+
+        ws4 = wb.create_sheet('Lotes Disponiveis')
+        ws4.append(['id_lote', 'tipo_origem', 'uso_permitido', 'documento_origem', 'lote_origem', 'produto', 'saldo_disponivel', 'unidade', 'fornecedor', 'data_origem', 'declaracao_fsc', 'descricao'])
+
+        available_lots = _get_available_import_lots(participant)
+        for item in available_lots:
+            ws4.append([
+                item['id'],
+                item['source_type'],
+                item['usage_hint'],
+                item['document_number'],
+                item['batch_code'],
+                item['product'],
+                float(item['remaining']),
+                item['unit'],
+                item['supplier'],
+                item['movement_date'].strftime('%Y-%m-%d'),
+                item['fsc_claim'],
+                item['label'],
+            ])
+
+        if available_lots:
+            last_row = len(available_lots) + 1
+            dv = DataValidation(type='list', formula1=f"='Lotes Disponiveis'!$A$2:$A${last_row}", allow_blank=True)
+            dv.prompt = 'Selecione um ID de lote listado na aba Lotes Disponiveis.'
+            dv.error = 'Escolha um ID de lote válido da aba Lotes Disponiveis.'
+            ws2.add_data_validation(dv)
+            ws3.add_data_validation(dv)
+            dv.add('I2:I500')
+            dv.add('H2:H500')
+
+        for ws in [ws1, ws2, ws3, ws4]:
+            ws.freeze_panes = 'A2'
+            for column_cells in ws.columns:
+                max_length = max(len(_safe_str(cell.value)) for cell in column_cells[:50]) if column_cells else 12
+                ws.column_dimensions[column_cells[0].column_letter].width = min(max(max_length + 2, 12), 28)
+
+        instructions = wb.create_sheet('Instrucoes')
+        instructions.append(['Como usar'])
+        instructions.append(['1. Para saídas e transformações, consulte a aba Lotes Disponiveis e copie o id_lote para a coluna id_lote_origem.'])
+        instructions.append(['2. Para múltiplas origens, separe os IDs e as quantidades por ; nas colunas id_lote_origem e quantidade_origem.'])
+        instructions.append(['3. A coluna quantidade_origem deve somar exatamente a quantidade consumida pela linha.'])
+        instructions.append(['4. Em transformações, use apenas lotes de entrada.'])
+        if participant:
+            instructions.append([f'Participante usado para montar os lotes disponíveis: {participant}'])
+        else:
+            instructions.append(['Selecione um participante na tela antes de baixar o modelo para vir com os lotes disponíveis.'])
+
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename=modelo_importacao_fsc.xlsx'
         wb.save(response)

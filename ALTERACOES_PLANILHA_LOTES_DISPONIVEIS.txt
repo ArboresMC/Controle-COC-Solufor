@@ -1,0 +1,13 @@
+Atualizações implementadas:
+- Planilha modelo agora inclui aba "Lotes Disponiveis"
+- Download pode vir filtrado pelo participante selecionado na tela de importação
+- Colunas novas em Saidas: id_lote_origem, origem_tipo, documento_origem, lote_origem, quantidade_origem
+- Colunas novas em Transformacoes: id_lote_origem, origem_tipo, documento_origem, lote_origem, quantidade_origem
+- Validação de importação aceita alocação manual por id_lote_origem
+- Suporte a múltiplas origens separadas por ;
+- A soma de quantidade_origem precisa bater com a quantidade consumida da linha
+- Transformações aceitam apenas lotes de entrada como origem manual
+
+Arquivos alterados:
+- reports/views.py
+- templates/reports/import_workbook.html
