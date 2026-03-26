@@ -1,0 +1,21 @@
+Pacote: Histórico de Importações
+
+O que foi incluído:
+- histórico das últimas importações na própria tela /reports/import/
+- card de detalhes do job selecionado
+- atualização automática de status, progresso e erros
+- manutenção do modelo com aba Lotes Disponiveis e id_lote_origem
+- manutenção da fila sem custo extra usando ImportJob
+
+Arquivos principais:
+- reports/views.py
+- reports/urls.py
+- templates/reports/import_workbook.html
+- reports/models.py
+- reports/management/commands/process_import_jobs.py
+- reports/migrations/0001_importjob.py
+- start.sh
+
+Observação:
+- se seu projeto já tem a migration de ImportJob aplicada, rodar migrate novamente não vai apagar nada.
+- se ainda não tiver ImportJob no projeto atual, rode migrate após substituir os arquivos.

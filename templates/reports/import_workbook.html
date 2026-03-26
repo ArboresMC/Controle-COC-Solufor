@@ -11,42 +11,33 @@
     color: #0b6280;
     font-weight: 600;
   }
-
-  .import-note.is-visible {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .import-spinner {
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-    border: 2px solid rgba(11, 98, 128, .18);
-    border-top-color: #0b6280;
-    animation: import-spin .8s linear infinite;
-    flex: 0 0 18px;
-  }
-
-  @keyframes import-spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .actions.is-busy .btn {
-    pointer-events: none;
-    opacity: .78;
-  }
-
-  .actions .btn[disabled] {
-    cursor: not-allowed;
-    transform: none !important;
-  }
-
-  .import-hint {
-    margin-top: 10px;
-    color: var(--muted);
-    font-size: 13px;
-  }
+  .import-note.is-visible { display: flex; align-items: center; gap: 12px; }
+  .import-spinner { width: 18px; height: 18px; border-radius: 999px; border: 2px solid rgba(11, 98, 128, .18); border-top-color: #0b6280; animation: import-spin .8s linear infinite; flex: 0 0 18px; }
+  @keyframes import-spin { to { transform: rotate(360deg); } }
+  .actions.is-busy .btn { pointer-events: none; opacity: .78; }
+  .actions .btn[disabled] { cursor: not-allowed; transform: none !important; }
+  .import-hint { margin-top: 10px; color: var(--muted); font-size: 13px; }
+  .queue-card { margin-top: 18px; }
+  .queue-status { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+  .status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+  .status-pill.pending { background: #fff7ed; color: #9a3412; }
+  .status-pill.processing { background: #eff6ff; color: #1d4ed8; }
+  .status-pill.completed { background: #ecfdf5; color: #047857; }
+  .status-pill.failed { background: #fef2f2; color: #b91c1c; }
+  .progress-wrap { margin-bottom: 16px; }
+  .progress-bar { width: 100%; height: 12px; border-radius: 999px; background: #e5e7eb; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #0ea5e9, #22c55e); transition: width .3s ease; }
+  .progress-meta { margin-top: 8px; display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; }
+  .job-summary-grid, .job-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .job-summary-item { border: 1px solid rgba(15, 23, 42, .08); border-radius: 14px; padding: 12px 14px; background: rgba(248, 250, 252, .9); }
+  .job-summary-item strong { display: block; font-size: 22px; margin-top: 4px; }
+  .job-errors { margin-top: 16px; border: 1px solid rgba(239, 68, 68, .15); background: #fff7f7; border-radius: 14px; padding: 14px 16px; }
+  .job-errors ul { margin: 10px 0 0; padding-left: 18px; }
+  .history-table { width: 100%; border-collapse: collapse; }
+  .history-table th, .history-table td { padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, .08); text-align: left; vertical-align: top; }
+  .history-table th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .history-actions { white-space: nowrap; }
+  .history-empty { color: var(--muted); }
 </style>
 
 <div class="split">
@@ -55,7 +46,7 @@
       <div>
         <div class="kicker">Importação inteligente</div>
         <h2 class="card-title">Validar e importar planilha</h2>
-        <p class="card-subtitle">Envie a planilha no modelo oficial. O sistema valida linha por linha antes de importar.</p>
+        <p class="card-subtitle">Envie a planilha no modelo oficial. O sistema valida primeiro e, na importação, envia o arquivo para a fila sem travar a página.</p>
       </div>
       <a class="btn secondary" href="/reports/import-template.xlsx" id="template-download-link">Baixar modelo</a>
     </div>
@@ -68,29 +59,129 @@
         <button class="btn secondary" type="submit" name="action" value="validate" data-idle-label="Validar planilha" data-busy-label="Validando...">
           <span class="btn-label">Validar planilha</span>
         </button>
-        <button class="btn" type="submit" name="action" value="import" data-idle-label="Importar planilha" data-busy-label="Importando...">
-          <span class="btn-label">Importar planilha</span>
+        <button class="btn" type="submit" name="action" value="import" data-idle-label="Enviar para fila" data-busy-label="Enviando...">
+          <span class="btn-label">Enviar para fila</span>
         </button>
       </div>
 
       <div class="import-note" id="import-note" aria-live="polite">
         <span class="import-spinner" aria-hidden="true"></span>
-        <span id="import-note-text">Processando arquivo. Não feche nem atualize esta página até a conclusão.</span>
+        <span id="import-note-text">Preparando arquivo. Não feche nem atualize a página até o envio concluir.</span>
       </div>
 
       <div class="import-hint">
-        Arquivos grandes podem levar alguns minutos para concluir.
+        O histórico abaixo guarda os últimos envios, com status, resumo e erros detalhados.
       </div>
     </form>
   </div>
 
   <div class="card soft">
     <div class="stack">
-      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes da importação.</span></div>
-      <div class="info-box"><strong>Cadastro automático</strong><br><span class="muted">Produtos, clientes e fornecedores podem ser criados automaticamente conforme o arquivo.</span></div>
-      <div class="info-box"><strong>Planilha modelo</strong><br><span class="muted">O download agora inclui a aba Lotes Disponiveis com os IDs de lote para seleção na importação.</span></div>
+      <div class="info-box"><strong>Sem custo extra</strong><br><span class="muted">A fila usa o próprio banco e o worker simples já existente no projeto.</span></div>
+      <div class="info-box"><strong>Histórico centralizado</strong><br><span class="muted">Você consegue revisar importações concluídas, falhas e arquivos processados recentemente.</span></div>
+      <div class="info-box"><strong>Modelo com lotes</strong><br><span class="muted">O download continua trazendo a aba Lotes Disponiveis e o preenchimento por id_lote_origem.</span></div>
     </div>
   </div>
+</div>
+
+{% if import_job %}
+<div class="card queue-card" id="import-job-card" data-status-url="{% url 'report_import_job_status' import_job.id %}">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Detalhes da importação</div>
+      <h2 class="card-title">Job #{{ import_job.id }}</h2>
+      <p class="card-subtitle">Arquivo: <strong id="job-file-name">{{ import_job.original_filename|default:'planilha enviada' }}</strong>{% if import_job.participant %} · Participante: <strong>{{ import_job.participant }}</strong>{% endif %}</p>
+    </div>
+    <a class="btn secondary" href="?job={{ import_job.id }}">Atualizar seleção</a>
+  </div>
+
+  <div class="queue-status">
+    <span class="status-pill {{ import_job.status }}" id="job-status-pill">{{ import_job.get_status_display }}</span>
+    <span class="muted" id="job-status-text">
+      {% if import_job.status == 'pending' %}
+        Aguardando processamento.
+      {% elif import_job.status == 'processing' %}
+        Importação em andamento.
+      {% elif import_job.status == 'completed' %}
+        Importação concluída.
+      {% else %}
+        Importação finalizada com falha.
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="job-progress-fill"></div></div>
+    <div class="progress-meta">
+      <span id="job-progress-label">0%</span>
+      <span id="job-progress-count">{{ import_job.progress_current }} / {{ import_job.progress_total }} linhas</span>
+    </div>
+  </div>
+
+  <div class="job-summary-grid">
+    <div class="job-summary-item"><span class="muted">Entradas</span><strong id="job-entries">{{ import_job.summary.entries|default:0 }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Saídas</span><strong id="job-sales">{{ import_job.summary.sales|default:0 }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Transformações</span><strong id="job-transformations">{{ import_job.summary.transformations|default:0 }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Erros</span><strong id="job-errors-count">{{ import_job.error_messages|length }}</strong></div>
+  </div>
+
+  <div class="job-meta-grid">
+    <div class="job-summary-item"><span class="muted">Criado em</span><strong id="job-created-at">{{ import_job.created_at|date:'d/m/Y H:i' }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Iniciado em</span><strong id="job-started-at">{{ import_job.started_at|date:'d/m/Y H:i'|default:'-' }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Finalizado em</span><strong id="job-finished-at">{{ import_job.finished_at|date:'d/m/Y H:i'|default:'-' }}</strong></div>
+    <div class="job-summary-item"><span class="muted">Participante</span><strong id="job-participant">{{ import_job.participant }}</strong></div>
+  </div>
+
+  <div class="job-errors" id="job-errors-box" {% if not import_job.error_messages %}style="display:none"{% endif %}>
+    <strong>Ocorrências</strong>
+    <ul id="job-errors-list">
+      {% for error in import_job.error_messages %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Histórico</div>
+      <h2 class="card-title">Últimas importações</h2>
+      <p class="card-subtitle">Selecione um job para ver status detalhado, progresso e erros.</p>
+    </div>
+  </div>
+
+  {% if import_jobs %}
+  <div style="overflow-x:auto;">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>Status</th>
+          <th>Arquivo</th>
+          <th>Participante</th>
+          <th>Criado em</th>
+          <th>Resumo</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in import_jobs %}
+        <tr>
+          <td>#{{ job.id }}</td>
+          <td><span class="status-pill {{ job.status }}">{{ job.get_status_display }}</span></td>
+          <td>{{ job.original_filename|default:'planilha enviada' }}</td>
+          <td>{{ job.participant }}</td>
+          <td>{{ job.created_at|date:'d/m/Y H:i' }}</td>
+          <td>E {{ job.summary.entries|default:0 }} · S {{ job.summary.sales|default:0 }} · T {{ job.summary.transformations|default:0 }} · Erros {{ job.error_messages|length }}</td>
+          <td class="history-actions"><a class="btn secondary" href="?job={{ job.id }}">Ver detalhes</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="history-empty">Nenhuma importação registrada ainda.</p>
+  {% endif %}
 </div>
 
 {% if preview_errors %}
@@ -122,7 +213,6 @@
     const noteText = document.getElementById('import-note-text');
     const templateDownloadLink = document.getElementById('template-download-link');
     const participantField = document.getElementById('id_participant');
-
     if (!form || !actions || !note || !noteText) return;
 
     let busy = false;
@@ -139,63 +229,129 @@
     }
 
     syncTemplateLink();
-    if (participantField) {
-      participantField.addEventListener('change', syncTemplateLink);
-    }
+    if (participantField) participantField.addEventListener('change', syncTemplateLink);
 
     function setBusy(button) {
       if (busy) return false;
       busy = true;
-
       const action = button?.value || '';
-      const isImport = action === 'import';
-      const isValidate = action === 'validate';
-
       actions.classList.add('is-busy');
       note.classList.add('is-visible');
-
-      if (isImport) {
-        noteText.textContent = 'Importando planilha. Não feche nem atualize esta página até a conclusão.';
-      } else if (isValidate) {
+      if (action === 'import') {
+        noteText.textContent = 'Enviando arquivo para a fila interna. Aguarde esta etapa finalizar.';
+      } else if (action === 'validate') {
         noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
       } else {
-        noteText.textContent = 'Processando arquivo. Não feche nem atualize esta página até a conclusão.';
+        noteText.textContent = 'Processando arquivo. Aguarde a conclusão.';
       }
-
       actions.querySelectorAll('button').forEach((btn) => {
         btn.disabled = true;
         const label = btn.querySelector('.btn-label');
-        if (label) {
-          label.textContent = btn.dataset.busyLabel || 'Processando...';
-        }
+        if (label) label.textContent = btn.dataset.busyLabel || 'Processando...';
       });
-
       if (button) {
         button.disabled = false;
         const label = button.querySelector('.btn-label');
-        if (label) {
-          label.textContent = button.dataset.busyLabel || 'Processando...';
-        }
+        if (label) label.textContent = button.dataset.busyLabel || 'Processando...';
       }
-
       return true;
     }
 
     actions.querySelectorAll('button[type="submit"]').forEach((button) => {
       button.addEventListener('click', function () {
-        actions.querySelectorAll('button[type="submit"]').forEach((btn) => {
-          delete btn.dataset.clicked;
-        });
+        actions.querySelectorAll('button[type="submit"]').forEach((btn) => delete btn.dataset.clicked);
         this.dataset.clicked = '1';
       });
     });
 
     form.addEventListener('submit', function (event) {
       const clickedButton = actions.querySelector('button[data-clicked="1"]') || document.activeElement;
-      if (!setBusy(clickedButton)) {
-        event.preventDefault();
-      }
+      if (!setBusy(clickedButton)) event.preventDefault();
     });
+  })();
+
+  (function () {
+    const card = document.getElementById('import-job-card');
+    if (!card) return;
+    const url = card.dataset.statusUrl;
+    const statusPill = document.getElementById('job-status-pill');
+    const statusText = document.getElementById('job-status-text');
+    const progressFill = document.getElementById('job-progress-fill');
+    const progressLabel = document.getElementById('job-progress-label');
+    const progressCount = document.getElementById('job-progress-count');
+    const entries = document.getElementById('job-entries');
+    const sales = document.getElementById('job-sales');
+    const transformations = document.getElementById('job-transformations');
+    const errorsCount = document.getElementById('job-errors-count');
+    const errorsBox = document.getElementById('job-errors-box');
+    const errorsList = document.getElementById('job-errors-list');
+    const fileName = document.getElementById('job-file-name');
+    const createdAt = document.getElementById('job-created-at');
+    const startedAt = document.getElementById('job-started-at');
+    const finishedAt = document.getElementById('job-finished-at');
+    const participant = document.getElementById('job-participant');
+
+    function formatDate(value) {
+      if (!value) return '-';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString('pt-BR');
+    }
+
+    function render(data) {
+      const total = Number(data.progress_total || 0);
+      const current = Number(data.progress_current || 0);
+      const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : (data.status === 'completed' ? 100 : 0);
+      progressFill.style.width = percent + '%';
+      progressLabel.textContent = percent + '%';
+      progressCount.textContent = current + ' / ' + total + ' linhas';
+      statusPill.className = 'status-pill ' + data.status;
+      statusPill.textContent = data.status_label;
+      fileName.textContent = data.original_filename || 'planilha enviada';
+      entries.textContent = data.summary?.entries || 0;
+      sales.textContent = data.summary?.sales || 0;
+      transformations.textContent = data.summary?.transformations || 0;
+      errorsCount.textContent = (data.errors || []).length;
+      createdAt.textContent = formatDate(data.created_at);
+      startedAt.textContent = formatDate(data.started_at);
+      finishedAt.textContent = formatDate(data.finished_at);
+      participant.textContent = data.participant || '-';
+
+      if (data.status === 'pending') {
+        statusText.textContent = 'Aguardando processamento.';
+      } else if (data.status === 'processing') {
+        statusText.textContent = 'Importação em andamento. Você pode continuar usando o sistema.';
+      } else if (data.status === 'completed') {
+        statusText.textContent = 'Importação concluída com sucesso.';
+      } else {
+        statusText.textContent = 'A importação terminou com falhas. Revise as ocorrências abaixo.';
+      }
+
+      const errors = data.errors || [];
+      if (errors.length) {
+        errorsBox.style.display = 'block';
+        errorsList.innerHTML = errors.slice(0, 80).map((item) => '<li>' + item + '</li>').join('');
+      } else {
+        errorsBox.style.display = 'none';
+        errorsList.innerHTML = '';
+      }
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!response.ok) return;
+        const data = await response.json();
+        render(data);
+        if (data.status === 'pending' || data.status === 'processing') {
+          setTimeout(refresh, 3000);
+        }
+      } catch (error) {
+        console.error('Não foi possível atualizar o status da importação.', error);
+      }
+    }
+
+    refresh();
   })();
 </script>
 {% endblock %}
