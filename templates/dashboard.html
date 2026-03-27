@@ -2,6 +2,32 @@
 {% block hero_title %}Painel operacional Solufor{% endblock %}
 {% block hero_text %}Acompanhe saldos, movimentações do mês, pendências e indicadores essenciais para o controle operacional do grupo certificado.{% endblock %}
 {% block content %}
+<style>
+.dashboard-grid-2 { display:grid; grid-template-columns: 1.2fr .8fr; gap:18px; }
+.dashboard-grid-3 { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:18px; }
+.kpi-row { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; }
+.kpi-row .metric-value { margin:0; }
+.mini-stack { display:grid; gap:12px; }
+.progress-card { background:#f7fbfd; border:1px solid var(--line); border-radius:16px; padding:14px 16px; }
+.progress-head { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:8px; }
+.progress-bar-track { width:100%; height:10px; border-radius:999px; background:#e2edf3; overflow:hidden; }
+.progress-bar-fill { height:100%; border-radius:999px; background:linear-gradient(90deg, #005B78 0%, #1aa0c3 100%); }
+.progress-bar-fill.warning { background:linear-gradient(90deg, #d97706 0%, #f59e0b 100%); }
+.progress-bar-fill.danger { background:linear-gradient(90deg, #b91c1c 0%, #ef4444 100%); }
+.progress-bar-fill.success { background:linear-gradient(90deg, #047857 0%, #10b981 100%); }
+.quick-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.quick-actions .btn { min-width: 180px; justify-content:center; }
+.summary-list { display:grid; gap:10px; }
+.summary-pill { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 14px; border-radius:14px; background:#f7fbfd; border:1px solid var(--line); }
+.summary-pill strong { font-size:14px; }
+.summary-pill span { color:var(--muted); font-size:13px; }
+.participant-chip-list { display:flex; flex-wrap:wrap; gap:10px; }
+.participant-chip { padding:9px 12px; border-radius:999px; background:#f3f8fb; border:1px solid var(--line); font-size:13px; }
+@media (max-width: 1100px) {
+  .dashboard-grid-2, .dashboard-grid-3 { grid-template-columns: 1fr; }
+}
+</style>
+
 {% if dashboard_alerts %}
 <div class="card">
   <div class="card-header">
@@ -27,18 +53,118 @@
 <div class="grid metrics">
   <div class="card metric-card"><div class="metric-label">Entradas no mês</div><div class="metric-value">{{ entries_count }}</div><div class="metric-foot">Total convertido: {{ entries_total }}</div></div>
   <div class="card metric-card"><div class="metric-label">Saídas no mês</div><div class="metric-value">{{ sales_count }}</div><div class="metric-foot">Total convertido: {{ sales_total }}</div></div>
-  <div class="card metric-card"><div class="metric-label">Transformações</div><div class="metric-value">{{ transformations_count }}</div><div class="metric-foot">Registros de conversão entre produtos</div></div>
+  <div class="card metric-card"><div class="metric-label">Transformações</div><div class="metric-value">{{ transformations_count }}</div><div class="metric-foot">Produção convertida: {{ transformations_total }}</div></div>
   <div class="card metric-card"><div class="metric-label">Pendências</div><div class="metric-value">{{ needs_correction }}</div><div class="metric-foot">Registros aguardando correção ou revisão</div></div>
 </div>
 
-{% if user.is_manager %}
-<div class="grid metrics">
-  <div class="card metric-card"><div class="metric-label">Participantes ativos</div><div class="metric-value">{{ manager_metrics.participants_active }}</div><div class="metric-foot">Cadastros operacionais ativos</div></div>
-  <div class="card metric-card"><div class="metric-label">Sem fechamento no mês</div><div class="metric-value">{{ manager_metrics.participants_without_closing }}</div><div class="metric-foot">Participantes ainda sem envio</div></div>
-  <div class="card metric-card"><div class="metric-label">Fechamentos enviados</div><div class="metric-value">{{ manager_metrics.closings_submitted }}</div><div class="metric-foot">Competência atual</div></div>
-  <div class="card metric-card"><div class="metric-label">Participantes com saldo baixo</div><div class="metric-value">{{ manager_metrics.low_balance_participants }}</div><div class="metric-foot">Itens em nível de atenção</div></div>
+<div class="dashboard-grid-2">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Visão do mês</div>
+        <h2 class="card-title">Distribuição operacional</h2>
+        <p class="card-subtitle">Participação das movimentações já registradas nesta competência.</p>
+      </div>
+      <span class="badge neutral">{{ movement_total }} movimento{{ movement_total|pluralize }}</span>
+    </div>
+    <div class="mini-stack">
+      <div class="progress-card">
+        <div class="progress-head"><strong>Entradas</strong><span>{{ entry_share }}%</span></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill" style="width: {{ entry_share }}%;"></div></div>
+      </div>
+      <div class="progress-card">
+        <div class="progress-head"><strong>Saídas</strong><span>{{ sale_share }}%</span></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill warning" style="width: {{ sale_share }}%;"></div></div>
+      </div>
+      <div class="progress-card">
+        <div class="progress-head"><strong>Transformações</strong><span>{{ transformation_share }}%</span></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill success" style="width: {{ transformation_share }}%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card soft">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Atalhos</div>
+        <h2 class="card-title">Ações rápidas</h2>
+        <p class="card-subtitle">Acesso direto às tarefas que costumam ser mais frequentes.</p>
+      </div>
+    </div>
+    <div class="quick-actions">
+      {% if user.is_participant_user %}
+      <a class="btn" href="/transactions/entries/new/">Nova entrada</a>
+      <a class="btn" href="/transactions/sales/new/">Nova saída</a>
+      <a class="btn" href="/transactions/transformations/new/">Nova transformação</a>
+      {% endif %}
+      <a class="btn secondary" href="/reports/import/">Importar planilha</a>
+      <a class="btn secondary" href="/reports/traceability/">Rastreabilidade</a>
+      <a class="btn secondary" href="/transactions/documents/">Documentos</a>
+      <a class="btn secondary" href="/compliance/">Fechamentos</a>
+    </div>
+  </div>
 </div>
 
+<div class="dashboard-grid-2">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Produtos do mês</div>
+        <h2 class="card-title">Mais movimentados</h2>
+        <p class="card-subtitle">Comparativo rápido entre entradas e saídas por produto.</p>
+      </div>
+    </div>
+    {% if top_products %}
+    <div class="mini-stack">
+      {% for item in top_products %}
+      <div class="progress-card">
+        <div class="progress-head"><strong>{{ item.name }}</strong><span class="muted">Entradas {{ item.entry_total }} · Saídas {{ item.sale_total }}</span></div>
+        <div class="progress-bar-track" style="margin-bottom:8px;"><div class="progress-bar-fill" style="width: {{ item.entry_bar }}%;"></div></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill warning" style="width: {{ item.sale_bar }}%;"></div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">Sem volume suficiente neste mês para montar o comparativo.</div>
+    {% endif %}
+  </div>
+
+  {% if user.is_manager %}
+  <div class="card soft">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Cobertura do fechamento</div>
+        <h2 class="card-title">Situação da competência</h2>
+        <p class="card-subtitle">Resumo dos participantes ativos e status dos fechamentos.</p>
+      </div>
+    </div>
+    <div class="summary-list">
+      <div class="summary-pill"><strong>Participantes ativos</strong><span>{{ manager_metrics.participants_active }}</span></div>
+      <div class="summary-pill"><strong>Sem fechamento no mês</strong><span>{{ manager_metrics.participants_without_closing }}</span></div>
+      <div class="summary-pill"><strong>Fechamentos enviados</strong><span>{{ manager_metrics.closings_submitted }}</span></div>
+      <div class="summary-pill"><strong>Fechamentos rejeitados</strong><span>{{ manager_metrics.closings_rejected }}</span></div>
+      <div class="summary-pill"><strong>Participantes com saldo em atenção</strong><span>{{ manager_metrics.low_balance_participants }}</span></div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card soft">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Resumo de saldos</div>
+        <h2 class="card-title">Saúde operacional</h2>
+        <p class="card-subtitle">Leitura rápida do que já está validado e do que exige atenção.</p>
+      </div>
+    </div>
+    <div class="summary-list">
+      <div class="summary-pill"><strong>Saldos validados</strong><span>{{ balance_summary.validated_count }}</span></div>
+      <div class="summary-pill"><strong>Saldos projetados</strong><span>{{ balance_summary.projected_count }}</span></div>
+      <div class="summary-pill"><strong>Itens em atenção</strong><span>{{ balance_summary.low_count }}</span></div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if user.is_manager %}
 <div class="card">
   <div class="card-header">
     <div>
@@ -55,10 +181,10 @@
       <tr><th>Participante</th><th>Saldos monitorados</th><th>Saldos baixos</th><th>Ação</th></tr>
       {% for item in participant_summaries %}
       <tr>
-        <td><strong>{{ item.participant }}</strong></td>
+        <td><strong>{{ item.participant_name }}</strong></td>
         <td>{{ item.balance_count }}</td>
         <td>{% if item.low_count %}<span class="badge warning">{{ item.low_count }} em alerta</span>{% else %}<span class="badge success">Sem alerta</span>{% endif %}</td>
-        <td><a class="inline-link" href="/reports/traceability/?participant={{ item.participant.id }}">Abrir rastreabilidade</a></td>
+        <td><a class="inline-link" href="/reports/traceability/?participant={{ item.participant_id }}">Abrir rastreabilidade</a></td>
       </tr>
       {% empty %}
       <tr><td colspan="4" class="muted">Nenhum participante consolidado ainda.</td></tr>
@@ -66,8 +192,26 @@
     </table>
   </div>
 </div>
+
+<div class="card soft">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Participantes sem fechamento</h2>
+      <p class="card-subtitle">Lista curta para cobrança da competência atual.</p>
+    </div>
+  </div>
+  {% if participants_without_closing %}
+  <div class="participant-chip-list">
+    {% for participant_name in participants_without_closing %}
+    <span class="participant-chip">{{ participant_name }}</span>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">Todos os participantes ativos já possuem fechamento vinculado nesta competência.</div>
+  {% endif %}
+</div>
 {% else %}
-<div class="split">
+<div class="dashboard-grid-2">
   <div class="card">
     <div class="card-header">
       <div>

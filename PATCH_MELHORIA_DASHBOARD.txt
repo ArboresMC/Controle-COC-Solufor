@@ -1,0 +1,19 @@
+PACOTE: Melhoria de dashboard
+
+Arquivos alterados:
+- transactions/views.py
+- templates/dashboard.html
+
+O que foi melhorado:
+- dashboard com cache seguro (apenas dados serializáveis)
+- distribuição operacional do mês
+- bloco de ações rápidas
+- ranking de produtos mais movimentados
+- resumo de saldos para participante
+- resumo de fechamentos e acompanhamento por participante para gestor
+- mantém recente entradas, saídas e transformações
+
+Importante:
+- não há migration nova
+- não precisa rodar migrate
+- apenas substitua os arquivos e faça deploy

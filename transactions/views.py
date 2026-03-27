@@ -1,10 +1,9 @@
 from datetime import date
-from django.conf import settings
-from django.core.cache import cache
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView
@@ -13,92 +12,184 @@ from compliance.models import MonthlyClosing
 from participants.models import Participant
 from .forms import EntryRecordForm, SaleRecordForm, TransformationRecordForm
 from .models import EntryRecord, SaleRecord, TransformationRecord
-from .performance import build_cache_key
 from .services import convert_to_base, get_available_balance, get_balance_items, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot
 
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
         return self.request.user.is_manager
 
+def _serialize_balance_items(items):
+    serialized = []
+    for item in items:
+        product = item.get('product')
+        serialized.append({
+            'product': str(product),
+            'product_id': getattr(product, 'id', None),
+            'balance': str(item.get('balance', 0)),
+            'unit': item.get('unit', ''),
+            'status_class': item.get('status_class', 'neutral'),
+        })
+    return serialized
+
+
+def _build_top_products(entries_qs, sales_qs):
+    entries_map = {row['product__name']: row['total'] for row in entries_qs.values('product__name').annotate(total=Sum('quantity_base')).order_by('-total')[:5]}
+    sales_map = {row['product__name']: row['total'] for row in sales_qs.values('product__name').annotate(total=Sum('quantity_base')).order_by('-total')[:5]}
+    names = []
+    for name in list(entries_map.keys()) + list(sales_map.keys()):
+        if name not in names:
+            names.append(name)
+    items = []
+    for name in names[:5]:
+        entry_total = entries_map.get(name) or 0
+        sale_total = sales_map.get(name) or 0
+        items.append({
+            'name': name,
+            'entry_total': entry_total,
+            'sale_total': sale_total,
+            'entry_bar': 0,
+            'sale_bar': 0,
+        })
+    max_total = max([max(item['entry_total'], item['sale_total']) for item in items], default=0)
+    for item in items:
+        item['entry_bar'] = int((item['entry_total'] / max_total) * 100) if max_total else 0
+        item['sale_bar'] = int((item['sale_total'] / max_total) * 100) if max_total else 0
+    return items
+
+
+def _base_dashboard_context(user, today):
+    current_org = getattr(user, 'current_organization', None)
+    month_entries = EntryRecord.objects.select_related('participant', 'product')
+    month_sales = SaleRecord.objects.select_related('participant', 'product')
+    transformations = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
+    closings = MonthlyClosing.objects.select_related('participant').filter(year=today.year, month=today.month)
+
+    if user.is_manager or user.is_auditor:
+        if current_org:
+            month_entries = month_entries.filter(participant__organization=current_org)
+            month_sales = month_sales.filter(participant__organization=current_org)
+            transformations = transformations.filter(participant__organization=current_org)
+            closings = closings.filter(participant__organization=current_org)
+        else:
+            month_entries = EntryRecord.objects.none()
+            month_sales = SaleRecord.objects.none()
+            transformations = TransformationRecord.objects.none()
+            closings = MonthlyClosing.objects.none()
+    elif getattr(user, 'participant', None):
+        month_entries = month_entries.filter(participant=user.participant)
+        month_sales = month_sales.filter(participant=user.participant)
+        transformations = transformations.filter(participant=user.participant)
+        closings = closings.filter(participant=user.participant)
+    else:
+        month_entries = EntryRecord.objects.none()
+        month_sales = SaleRecord.objects.none()
+        transformations = TransformationRecord.objects.none()
+        closings = MonthlyClosing.objects.none()
+
+    month_entries = month_entries.filter(movement_date__year=today.year, movement_date__month=today.month)
+    month_sales = month_sales.filter(movement_date__year=today.year, movement_date__month=today.month)
+    transformations = transformations.filter(movement_date__year=today.year, movement_date__month=today.month)
+    return current_org, month_entries, month_sales, transformations, closings
+
+
+def _dashboard_cache_key(user, today):
+    org = getattr(user, 'current_organization', None)
+    participant = getattr(user, 'participant', None)
+    return f"dashboard:v2:user:{user.id}:org:{getattr(org, 'id', 'none')}:participant:{getattr(participant, 'id', 'none')}:month:{today:%Y-%m}"
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'dashboard.html'
 
-    def _get_scope(self):
-        user = self.request.user
-        current_org = getattr(user, 'current_organization', None)
-        if user.is_manager or user.is_auditor:
-            return 'organization', getattr(current_org, 'id', None), current_org
-        participant = getattr(user, 'participant', None)
-        return 'participant', getattr(participant, 'id', None), participant
-
-    def _build_dashboard_context(self):
-        ctx = {}
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
         user = self.request.user
         today = date.today()
-        current_org = getattr(user, 'current_organization', None)
-        month_entries = EntryRecord.objects.select_related('participant', 'product')
-        month_sales = SaleRecord.objects.select_related('participant', 'product')
-        transformations = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
-        closings = MonthlyClosing.objects.select_related('participant').filter(year=today.year, month=today.month)
-        if user.is_manager or user.is_auditor:
-            if current_org:
-                month_entries = month_entries.filter(participant__organization=current_org)
-                month_sales = month_sales.filter(participant__organization=current_org)
-                transformations = transformations.filter(participant__organization=current_org)
-                closings = closings.filter(participant__organization=current_org)
-            else:
-                month_entries = EntryRecord.objects.none(); month_sales = SaleRecord.objects.none(); transformations = TransformationRecord.objects.none(); closings = MonthlyClosing.objects.none()
-        elif getattr(user, 'participant', None):
-            month_entries = month_entries.filter(participant=user.participant)
-            month_sales = month_sales.filter(participant=user.participant)
-            transformations = transformations.filter(participant=user.participant)
-            closings = closings.filter(participant=user.participant)
-        else:
-            month_entries = EntryRecord.objects.none(); month_sales = SaleRecord.objects.none(); transformations = TransformationRecord.objects.none(); closings = MonthlyClosing.objects.none()
-        month_entries = month_entries.filter(movement_date__year=today.year, movement_date__month=today.month)
-        month_sales = month_sales.filter(movement_date__year=today.year, movement_date__month=today.month)
-        transformations = transformations.filter(movement_date__year=today.year, movement_date__month=today.month)
-        ctx['entries_count'] = month_entries.count()
-        ctx['sales_count'] = month_sales.count()
-        ctx['transformations_count'] = transformations.count()
-        ctx['entries_total'] = month_entries.aggregate(total=Sum('quantity_base'))['total'] or 0
-        ctx['sales_total'] = month_sales.aggregate(total=Sum('quantity_base'))['total'] or 0
-        ctx['needs_correction'] = month_entries.filter(status='needs_correction').count() + month_sales.filter(status='needs_correction').count()
-        ctx['current_closings'] = list(closings)
-        ctx['recent_entries'] = list(month_entries[:5])
-        ctx['recent_sales'] = list(month_sales[:5])
-        ctx['recent_transformations'] = list(transformations[:5])
+        current_org, month_entries, month_sales, transformations, closings = _base_dashboard_context(user, today)
+
+        ctx['current_closings'] = closings
+        ctx['recent_entries'] = month_entries.order_by('-movement_date', '-id')[:5]
+        ctx['recent_sales'] = month_sales.order_by('-movement_date', '-id')[:5]
+        ctx['recent_transformations'] = transformations.order_by('-movement_date', '-id')[:5]
+
+        cache_key = _dashboard_cache_key(user, today)
+        cached = cache.get(cache_key)
+        if cached:
+            ctx.update(cached)
+            return ctx
+
+        entries_count = month_entries.count()
+        sales_count = month_sales.count()
+        transformations_count = transformations.count()
+        entries_total = month_entries.aggregate(total=Sum('quantity_base'))['total'] or 0
+        sales_total = month_sales.aggregate(total=Sum('quantity_base'))['total'] or 0
+        transformations_total = transformations.aggregate(total=Sum('target_quantity_base'))['total'] or 0
+        needs_correction = month_entries.filter(status='needs_correction').count() + month_sales.filter(status='needs_correction').count()
+        movement_total = entries_count + sales_count + transformations_count
+
+        data = {
+            'entries_count': entries_count,
+            'sales_count': sales_count,
+            'transformations_count': transformations_count,
+            'entries_total': entries_total,
+            'sales_total': sales_total,
+            'transformations_total': transformations_total,
+            'needs_correction': needs_correction,
+            'movement_total': movement_total,
+            'entry_share': int((entries_count / movement_total) * 100) if movement_total else 0,
+            'sale_share': int((sales_count / movement_total) * 100) if movement_total else 0,
+            'transformation_share': int((transformations_count / movement_total) * 100) if movement_total else 0,
+            'top_products': _build_top_products(month_entries, month_sales),
+        }
+
         if user.is_manager:
             active_participants = Participant.objects.filter(status='active')
             active_participants = active_participants.filter(organization=current_org) if current_org else Participant.objects.none()
-            active_participants = active_participants.order_by('trade_name', 'legal_name')
-            top_participants = list(active_participants[:8])
-            participant_summaries = [get_participant_balance_summary(p) for p in top_participants]
             closings_qs = MonthlyClosing.objects.filter(year=today.year, month=today.month)
             closings_qs = closings_qs.filter(participant__organization=current_org) if current_org else MonthlyClosing.objects.none()
-            participants_without = active_participants.exclude(id__in=closings_qs.values_list('participant_id', flat=True))
-            ctx['manager_metrics'] = {'participants_active': active_participants.count(),'participants_without_closing': participants_without.count(),'closings_submitted': closings_qs.filter(status='submitted').count(),'closings_rejected': closings_qs.filter(status='rejected').count(),'low_balance_participants': len([s for s in participant_summaries if s['low_count']]),}
-            ctx['participant_summaries'] = participant_summaries
-            ctx['participants_without_closing'] = list(participants_without[:10])
-            ctx['balance_items'] = []
-            ctx['projected_balance_items'] = []
-            ctx['dashboard_alerts'] = get_manager_alerts(today=today, organization=current_org)
+
+            participant_summaries = []
+            for participant in active_participants.order_by('trade_name', 'legal_name')[:8]:
+                summary = get_participant_balance_summary(participant)
+                participant_summaries.append({
+                    'participant_name': str(participant),
+                    'participant_id': participant.id,
+                    'balance_count': summary['balance_count'],
+                    'low_count': summary['low_count'],
+                })
+
+            without_closing_qs = active_participants.exclude(id__in=closings_qs.values_list('participant_id', flat=True))
+            data.update({
+                'manager_metrics': {
+                    'participants_active': active_participants.count(),
+                    'participants_without_closing': without_closing_qs.count(),
+                    'closings_submitted': closings_qs.filter(status='submitted').count(),
+                    'closings_rejected': closings_qs.filter(status='rejected').count(),
+                    'low_balance_participants': len([s for s in participant_summaries if s['low_count']]),
+                },
+                'participant_summaries': participant_summaries,
+                'participants_without_closing': [str(p) for p in without_closing_qs[:10]],
+                'balance_items': [],
+                'projected_balance_items': [],
+                'dashboard_alerts': get_manager_alerts(today=today, organization=current_org),
+            })
         else:
             participant = getattr(user, 'participant', None)
-            ctx['balance_items'] = get_balance_items(participant, projected=False) if participant else []
-            ctx['projected_balance_items'] = get_balance_items(participant, projected=True) if participant else []
-            ctx['dashboard_alerts'] = get_participant_alerts(participant, today=today) if participant else []
-        return ctx
+            balance_items = get_balance_items(participant, projected=False) if participant else []
+            projected_balance_items = get_balance_items(participant, projected=True) if participant else []
+            data.update({
+                'balance_items': _serialize_balance_items(balance_items),
+                'projected_balance_items': _serialize_balance_items(projected_balance_items),
+                'dashboard_alerts': get_participant_alerts(participant, today=today) if participant else [],
+                'balance_summary': {
+                    'validated_count': len(balance_items),
+                    'projected_count': len(projected_balance_items),
+                    'low_count': len([item for item in projected_balance_items if item['status_class'] in ['warning', 'danger']]),
+                }
+            })
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        scope_type, scope_id, _ = self._get_scope()
-        cache_key = build_cache_key('dashboard', scope_type, scope_id, extra=date.today().isoformat())
-        cached = cache.get(cache_key)
-        if cached is None:
-            cached = self._build_dashboard_context()
-            cache.set(cache_key, cached, settings.CACHE_TTL_DASHBOARD)
-        ctx.update(cached)
+        cache.set(cache_key, data, 120)
+        ctx.update(data)
         return ctx
 
 class ParticipantScopedMixin(LoginRequiredMixin):
