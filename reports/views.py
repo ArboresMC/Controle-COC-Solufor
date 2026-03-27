@@ -303,7 +303,7 @@ class ImportWorkbookView(LoginRequiredMixin, View):
 
         action = request.POST.get('action') or 'validate'
         uploaded_file = form.cleaned_data['workbook']
-        workbook = openpyxl., (uploaded_file)
+        workbook = openpyxl.load_workbook(uploaded_file)
         summary, errors, preview = build_import_preview(workbook, participant, request.user, persist=False)
 
         if action == 'validate' or errors:
