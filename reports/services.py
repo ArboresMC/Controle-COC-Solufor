@@ -77,6 +77,14 @@ def serialize_row_payload(row):
     return {key: serialize_for_json(value) for key, value in (row or {}).items()}
 
 
+def serialize_payload_for_json(value):
+    if isinstance(value, dict):
+        return {key: serialize_payload_for_json(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [serialize_payload_for_json(item) for item in value]
+    return serialize_for_json(value)
+
+
 def make_import_error(sheet, row_number, message, row_data=None, field=''):
     return {
         'sheet': sheet,
@@ -386,8 +394,8 @@ def process_import_job(job):
     total_rows = count_workbook_rows(workbook)
     preview_summary, preview_errors, preview = build_import_preview(workbook, job.participant, job.created_by, persist=False)
 
-    job.summary = preview_summary
-    job.preview = preview
+    job.summary = serialize_payload_for_json(preview_summary)
+    job.preview = serialize_payload_for_json(preview)
     job.progress_total = total_rows
     job.progress_current = 0
     job.last_heartbeat = timezone.now()
@@ -395,7 +403,7 @@ def process_import_job(job):
 
     if preview_errors:
         job.status = ImportJob.STATUS_FAILED
-        job.error_messages = preview_errors
+        job.error_messages = serialize_payload_for_json(preview_errors)
         job.finished_at = timezone.now()
         job.last_heartbeat = timezone.now()
         job.save(update_fields=['status', 'error_messages', 'finished_at', 'last_heartbeat', 'updated_at'])
@@ -409,15 +417,15 @@ def process_import_job(job):
                 raise ValueError(humanize_import_errors(persisted_errors)[0])
     except Exception as exc:
         job.status = ImportJob.STATUS_FAILED
-        job.error_messages = preview_errors or [make_import_error('Importação', '', exc)]
+        job.error_messages = serialize_payload_for_json(preview_errors or [make_import_error('Importação', '', exc)])
         job.finished_at = timezone.now()
         job.last_heartbeat = timezone.now()
         job.save(update_fields=['status', 'error_messages', 'finished_at', 'last_heartbeat', 'updated_at'])
         raise
 
     job.status = ImportJob.STATUS_COMPLETED
-    job.summary = persisted_summary
-    job.preview = persisted_preview
+    job.summary = serialize_payload_for_json(persisted_summary)
+    job.preview = serialize_payload_for_json(persisted_preview)
     job.error_messages = []
     job.progress_current = total_rows
     job.finished_at = timezone.now()

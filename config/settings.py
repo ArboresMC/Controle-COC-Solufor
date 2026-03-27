@@ -17,6 +17,11 @@ if CUSTOM_DOMAIN:
         CSRF_TRUSTED_ORIGINS.append(origin)
 APP_BASE_URL = os.getenv('APP_BASE_URL', f"https://{CUSTOM_DOMAIN}" if CUSTOM_DOMAIN else 'https://portal-fsc.onrender.com')
 
+
+IMPORT_MODE = os.getenv('IMPORT_MODE', 'async' if DEBUG else 'sync').strip().lower()
+if IMPORT_MODE not in {'sync', 'async'}:
+    IMPORT_MODE = 'sync'
+
 INSTALLED_APPS = [
     'accounts',
     'django.contrib.admin',
