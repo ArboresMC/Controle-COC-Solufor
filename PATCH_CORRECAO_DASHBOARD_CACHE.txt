@@ -1,0 +1,12 @@
+Correção cirúrgica do erro 500 da dashboard.
+
+Causa corrigida:
+- o cache da dashboard tentava serializar um objeto temporário ProductStub, o que gerava PicklingError.
+
+Ajuste aplicado:
+- transactions/services.py agora retorna apenas dados simples e serializáveis no bloco de saldos da dashboard.
+
+Impacto:
+- sem migrations novas
+- não precisa rodar migrate
+- basta substituir o arquivo, subir no GitHub e redeployar

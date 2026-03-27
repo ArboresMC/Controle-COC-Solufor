@@ -235,9 +235,16 @@ def get_balance_items(participant, projected=False):
         available = to_decimal(row['balance']).quantize(Decimal('0.001'))
         if available == 0:
             continue
-        product_stub = type('ProductStub', (), {'__str__': lambda self, name=row['product__name']: name})()
+        product_label = row['product__name']
         unit = UNIT_LABELS.get(row['product__unit'], row['product__unit'])
-        items.append({'product': product_stub, 'balance': available, 'unit': unit, 'status_class': classify_balance(available)})
+        items.append({
+            'product': product_label,
+            'product_name': product_label,
+            'product_id': row['product_id'],
+            'balance': available,
+            'unit': unit,
+            'status_class': classify_balance(available),
+        })
     return items
 
 def classify_balance(value):
