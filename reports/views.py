@@ -317,7 +317,7 @@ class ImportWorkbookView(LoginRequiredMixin, View):
 
         if import_mode == 'sync':
             uploaded_file.seek(0)
-            workbook = openpyxl., (uploaded_file)
+            workbook = openpyxl.load_workbook(uploaded_file)
             summary, errors, preview = build_import_preview(workbook, participant, request.user, persist=True)
 
             if errors:
