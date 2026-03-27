@@ -158,18 +158,26 @@ def _coerce_product(product_name, *, default_unit=None, create_if_missing=False)
             defaults={'unit': default_unit or 'm3', 'active': True},
         )
         return product
-    return Product.objects.get(name=product_name)
+    product = Product.objects.filter(name=product_name).first()
+    if product is None:
+        raise ValueError(f'Produto "{product_name}" não encontrado. Cadastre-o antes de importar.')
+    return product
 
 
-def _get_or_create_counterparty(participant, name, *, type_):
+# CORREÇÃO: adicionado parâmetro create_if_missing (padrão False).
+# Na fase de preview (persist=False), apenas buscamos a contraparte sem criá-la,
+# evitando efeitos colaterais no banco durante a validação.
+def _get_or_create_counterparty(participant, name, *, type_, create_if_missing=True):
     normalized_name = safe_str(name)
     if not normalized_name:
         return None
-    return Counterparty.objects.get_or_create(
-        participant=participant,
-        name=normalized_name,
-        defaults={'type': type_},
-    )[0]
+    if create_if_missing:
+        return Counterparty.objects.get_or_create(
+            participant=participant,
+            name=normalized_name,
+            defaults={'type': type_},
+        )[0]
+    return Counterparty.objects.filter(participant=participant, name=normalized_name).first()
 
 
 def build_import_preview(workbook, participant, user, persist=False):
@@ -194,9 +202,11 @@ def build_import_preview(workbook, participant, user, persist=False):
                 observacoes = first_present(row, 'observacoes')
 
                 unidade = safe_str(unidade) or 'm3'
-                product = _coerce_product(produto_nome, default_unit=unidade, create_if_missing=True)
+                # CORREÇÃO: só cria produto novo durante a gravação real (persist=True).
+                product = _coerce_product(produto_nome, default_unit=unidade, create_if_missing=persist)
                 supplier_name = safe_str(fornecedor_nome) or 'Não informado'
-                supplier = _get_or_create_counterparty(participant, supplier_name, type_='supplier')
+                # CORREÇÃO: só cria fornecedor durante a gravação real (persist=True).
+                supplier = _get_or_create_counterparty(participant, supplier_name, type_='supplier', create_if_missing=persist)
                 quantidade = decimal_value(quantidade)
                 quantity_base = convert_to_base(product, quantidade, unidade)
                 preview = {
@@ -252,7 +262,8 @@ def build_import_preview(workbook, participant, user, persist=False):
                 customer_name = safe_str(cliente_nome)
                 if not customer_name:
                     raise ValueError('Cliente não informado.')
-                customer = _get_or_create_counterparty(participant, customer_name, type_='customer')
+                # CORREÇÃO: só cria cliente durante a gravação real (persist=True).
+                customer = _get_or_create_counterparty(participant, customer_name, type_='customer', create_if_missing=persist)
                 quantidade = decimal_value(quantidade)
                 unidade = safe_str(unidade) or product.unit
                 quantity_base = convert_to_base(product, quantidade, unidade)
@@ -309,7 +320,8 @@ def build_import_preview(workbook, participant, user, persist=False):
                 observacoes = first_present(row, 'observacoes')
 
                 source_product = _coerce_product(source_product_name)
-                target_product = _coerce_product(target_product_name, default_unit=safe_str(target_unit) or 'm3', create_if_missing=True)
+                # CORREÇÃO: só cria produto destino durante a gravação real (persist=True).
+                target_product = _coerce_product(target_product_name, default_unit=safe_str(target_unit) or 'm3', create_if_missing=persist)
                 rule = get_transformation_rule(source_product, target_product, participant=participant)
                 if not rule:
                     raise ValueError('Não existe regra de transformação cadastrada para os produtos selecionados para esta empresa.')
@@ -342,7 +354,8 @@ def build_import_preview(workbook, participant, user, persist=False):
                     lot_id = safe_str(first_present(row, 'id_lote_origem'))
                     if lot_id:
                         preferred_lot = TraceLot.objects.get(pk=lot_id, participant=participant, product=source_product)
-                    customer = _get_or_create_counterparty(participant, cliente_nome, type_='customer') if safe_str(cliente_nome) else None
+                    # CORREÇÃO: só cria cliente durante a gravação real (persist=True).
+                    customer = _get_or_create_counterparty(participant, cliente_nome, type_='customer', create_if_missing=True) if safe_str(cliente_nome) else None
                     obj = TransformationRecord.objects.create(
                         participant=participant,
                         movement_date=normalize_date(data),
