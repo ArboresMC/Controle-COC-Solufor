@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block content %}
 <style>
@@ -11,42 +12,30 @@
     color: #0b6280;
     font-weight: 600;
   }
-
-  .import-note.is-visible {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
+  .import-note.is-visible { display: flex; align-items: center; gap: 12px; }
   .import-spinner {
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-    border: 2px solid rgba(11, 98, 128, .18);
-    border-top-color: #0b6280;
-    animation: import-spin .8s linear infinite;
-    flex: 0 0 18px;
+    width: 18px; height: 18px; border-radius: 999px; border: 2px solid rgba(11, 98, 128, .18);
+    border-top-color: #0b6280; animation: import-spin .8s linear infinite; flex: 0 0 18px;
   }
-
-  @keyframes import-spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .actions.is-busy .btn {
-    pointer-events: none;
-    opacity: .78;
-  }
-
-  .actions .btn[disabled] {
-    cursor: not-allowed;
-    transform: none !important;
-  }
-
-  .import-hint {
-    margin-top: 10px;
-    color: var(--muted);
-    font-size: 13px;
-  }
+  @keyframes import-spin { to { transform: rotate(360deg); } }
+  .actions.is-busy .btn { pointer-events: none; opacity: .78; }
+  .actions .btn[disabled] { cursor: not-allowed; transform: none !important; }
+  .import-hint { margin-top: 10px; color: var(--muted); font-size: 13px; }
+  .job-status { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px; }
+  .job-status.pending { background:#fff7ed; color:#9a3412; }
+  .job-status.processing { background:#eff6ff; color:#1d4ed8; }
+  .job-status.completed { background:#ecfdf5; color:#047857; }
+  .job-status.failed { background:#fef2f2; color:#b91c1c; }
+  .job-list { display:grid; gap:12px; }
+  .job-item { border:1px solid rgba(15,23,42,.08); border-radius:16px; padding:14px; text-decoration:none; color:inherit; display:block; }
+  .job-item.is-active { border-color:rgba(11,98,128,.35); box-shadow:0 0 0 2px rgba(11,98,128,.08); }
+  .job-meta { color:var(--muted); font-size:13px; margin-top:6px; }
+  .progress-track { margin-top:10px; height:10px; border-radius:999px; background:#e5e7eb; overflow:hidden; }
+  .progress-bar { height:100%; background:#0b6280; }
+  .job-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+  .mini-stat { border:1px solid rgba(15,23,42,.06); border-radius:14px; padding:12px; background:#fff; }
+  .mini-stat .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .mini-stat .value { margin-top:6px; font-size:22px; font-weight:800; }
 </style>
 
 <div class="split">
@@ -55,7 +44,7 @@
       <div>
         <div class="kicker">Importação inteligente</div>
         <h2 class="card-title">Validar e importar planilha</h2>
-        <p class="card-subtitle">Envie a planilha no modelo oficial. O sistema valida linha por linha antes de importar.</p>
+        <p class="card-subtitle">A validação continua imediata. A importação agora entra em fila e é processada em background.</p>
       </div>
       <a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a>
     </div>
@@ -68,8 +57,8 @@
         <button class="btn secondary" type="submit" name="action" value="validate" data-idle-label="Validar planilha" data-busy-label="Validando...">
           <span class="btn-label">Validar planilha</span>
         </button>
-        <button class="btn" type="submit" name="action" value="import" data-idle-label="Importar planilha" data-busy-label="Importando...">
-          <span class="btn-label">Importar planilha</span>
+        <button class="btn" type="submit" name="action" value="import" data-idle-label="Enviar para fila" data-busy-label="Enviando...">
+          <span class="btn-label">Enviar para fila</span>
         </button>
       </div>
 
@@ -79,16 +68,16 @@
       </div>
 
       <div class="import-hint">
-        Arquivos grandes podem levar alguns minutos para concluir.
+        Na ação de importar, o arquivo é validado e entra em fila. Você pode sair da página enquanto o worker conclui o job.
       </div>
     </form>
   </div>
 
   <div class="card soft">
     <div class="stack">
-      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes da importação.</span></div>
-      <div class="info-box"><strong>Cadastro automático</strong><br><span class="muted">Produtos, clientes e fornecedores podem ser criados automaticamente conforme o arquivo.</span></div>
-      <div class="info-box"><strong>Planilha modelo</strong><br><span class="muted">Use as abas Entradas, Saidas e Transformacoes do modelo oficial.</span></div>
+      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes de colocar o arquivo na fila.</span></div>
+      <div class="info-box"><strong>Processamento assíncrono</strong><br><span class="muted">A gravação real roda em background via ImportJob + worker, sem travar a requisição.</span></div>
+      <div class="info-box"><strong>Histórico de jobs</strong><br><span class="muted">Acompanhe pendente, processando, concluído ou falhou com detalhes logo abaixo.</span></div>
     </div>
   </div>
 </div>
@@ -104,7 +93,7 @@
 
 {% if preview.entries or preview.sales or preview.transformations %}
 <div class="card">
-  <div class="card-header"><div><div class="kicker">Prévia</div><h2 class="card-title">Resumo da planilha validada</h2><p class="card-subtitle">Confira abaixo o que o sistema identificou antes de importar.</p></div></div>
+  <div class="card-header"><div><div class="kicker">Prévia</div><h2 class="card-title">Resumo da planilha validada</h2><p class="card-subtitle">Confira abaixo o que o sistema identificou antes de criar o job.</p></div></div>
   <div class="grid metrics">
     <div class="card metric-card"><div class="metric-label">Entradas</div><div class="metric-value">{{ preview.entries|length }}</div></div>
     <div class="card metric-card"><div class="metric-label">Saídas</div><div class="metric-value">{{ preview.sales|length }}</div></div>
@@ -114,69 +103,153 @@
 </div>
 {% endif %}
 
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Histórico</div>
+        <h2 class="card-title">Últimos jobs de importação</h2>
+      </div>
+    </div>
+
+    {% if jobs %}
+      <div class="job-list">
+        {% for job in jobs %}
+          <a class="job-item {% if selected_job and selected_job.pk == job.pk %}is-active{% endif %}" href="?job={{ job.pk }}">
+            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+              <div>
+                <strong>Job #{{ job.pk }}</strong><br>
+                <span class="muted">{{ job.original_filename|default:"planilha.xlsx" }}</span>
+              </div>
+              <span class="job-status {{ job.status }}">{{ job.get_status_display }}</span>
+            </div>
+            <div class="job-meta">
+              Participante: {{ job.participant }}<br>
+              Criado em: {{ job.created_at|date:"d/m/Y H:i" }}
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">Ainda não há jobs de importação para este ambiente.</p>
+    {% endif %}
+  </div>
+
+  <div class="card soft">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Detalhes</div>
+        <h2 class="card-title">Job selecionado</h2>
+      </div>
+    </div>
+
+    {% if selected_job %}
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:14px;">
+        <div>
+          <strong>Job #{{ selected_job.pk }}</strong><br>
+          <span class="muted">{{ selected_job.original_filename|default:"planilha.xlsx" }}</span>
+        </div>
+        <span class="job-status {{ selected_job.status }}">{{ selected_job.get_status_display }}</span>
+      </div>
+
+      <div class="job-grid">
+        <div class="mini-stat"><div class="label">Entradas</div><div class="value">{{ selected_job.summary.entries|default:0 }}</div></div>
+        <div class="mini-stat"><div class="label">Saídas</div><div class="value">{{ selected_job.summary.sales|default:0 }}</div></div>
+        <div class="mini-stat"><div class="label">Transformações</div><div class="value">{{ selected_job.summary.transformations|default:0 }}</div></div>
+        <div class="mini-stat"><div class="label">Erros</div><div class="value">{{ selected_job.error_messages|length }}</div></div>
+      </div>
+
+      <div class="job-meta" style="margin-top:14px;">
+        Participante: {{ selected_job.participant }}<br>
+        Criado por: {{ selected_job.created_by }}<br>
+        Início: {% if selected_job.started_at %}{{ selected_job.started_at|date:"d/m/Y H:i:s" }}{% else %}-{% endif %}<br>
+        Fim: {% if selected_job.finished_at %}{{ selected_job.finished_at|date:"d/m/Y H:i:s" }}{% else %}-{% endif %}
+      </div>
+
+      <div class="progress-track">
+        <div class="progress-bar" style="width:{% if selected_job.progress_total %}{% widthratio selected_job.progress_current selected_job.progress_total 100 %}{% else %}0{% endif %}%;"></div>
+      </div>
+      <div class="job-meta">Progresso: {{ selected_job.progress_current }}/{{ selected_job.progress_total }}</div>
+
+      {% if selected_job.error_messages %}
+        <div style="margin-top:16px;">
+          <h3 style="margin-bottom:8px;">Erros do job</h3>
+          <ul class="messages">
+            {% for error in selected_job.error_messages %}
+              <li>
+                {% if error.message %}
+                  {{ error.sheet }} linha {{ error.row_number }}: {{ error.message }}
+                {% else %}
+                  {{ error }}
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+          {% if selected_job_error_url %}
+            <a class="btn secondary" href="{{ selected_job_error_url }}">Baixar erros em Excel</a>
+          {% endif %}
+        </div>
+      {% elif selected_job.status == 'completed' %}
+        <p style="margin-top:16px; color:#047857; font-weight:700;">Job concluído sem inconsistências.</p>
+      {% endif %}
+    {% else %}
+      <p class="muted">Selecione um job para visualizar detalhes.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_job_running %}
+<script>
+  setTimeout(function () {
+    const url = new URL(window.location.href);
+    url.searchParams.set('job', '{{ selected_job.pk }}');
+    window.location.href = url.toString();
+  }, 5000);
+</script>
+{% endif %}
+
 <script>
   (function () {
     const form = document.getElementById('import-form');
     const actions = document.getElementById('import-actions');
     const note = document.getElementById('import-note');
     const noteText = document.getElementById('import-note-text');
-
     if (!form || !actions || !note || !noteText) return;
-
     let busy = false;
-
     function setBusy(button) {
       if (busy) return false;
       busy = true;
-
       const action = button?.value || '';
-      const isImport = action === 'import';
-      const isValidate = action === 'validate';
-
       actions.classList.add('is-busy');
       note.classList.add('is-visible');
-
-      if (isImport) {
-        noteText.textContent = 'Importando planilha. Não feche nem atualize esta página até a conclusão.';
-      } else if (isValidate) {
+      if (action === 'import') {
+        noteText.textContent = 'Validando arquivo e criando job de importação. Aguarde.';
+      } else if (action === 'validate') {
         noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
       } else {
-        noteText.textContent = 'Processando arquivo. Não feche nem atualize esta página até a conclusão.';
+        noteText.textContent = 'Processando arquivo. Aguarde.';
       }
-
       actions.querySelectorAll('button').forEach((btn) => {
         btn.disabled = true;
         const label = btn.querySelector('.btn-label');
-        if (label) {
-          label.textContent = btn.dataset.busyLabel || 'Processando...';
-        }
+        if (label) label.textContent = btn.dataset.busyLabel || 'Processando...';
       });
-
       if (button) {
         button.disabled = false;
         const label = button.querySelector('.btn-label');
-        if (label) {
-          label.textContent = button.dataset.busyLabel || 'Processando...';
-        }
+        if (label) label.textContent = button.dataset.busyLabel || 'Processando...';
       }
-
       return true;
     }
-
     actions.querySelectorAll('button[type="submit"]').forEach((button) => {
       button.addEventListener('click', function () {
-        actions.querySelectorAll('button[type="submit"]').forEach((btn) => {
-          delete btn.dataset.clicked;
-        });
+        actions.querySelectorAll('button[type="submit"]').forEach((btn) => delete btn.dataset.clicked);
         this.dataset.clicked = '1';
       });
     });
-
     form.addEventListener('submit', function (event) {
       const clickedButton = actions.querySelector('button[data-clicked="1"]') || document.activeElement;
-      if (!setBusy(clickedButton)) {
-        event.preventDefault();
-      }
+      if (!setBusy(clickedButton)) event.preventDefault();
     });
   })();
 </script>

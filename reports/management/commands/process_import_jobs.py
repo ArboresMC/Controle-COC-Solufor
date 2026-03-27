@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from reports.models import ImportJob
-from reports.views import process_import_job
+from reports.services import process_import_job
 
 
 class Command(BaseCommand):
