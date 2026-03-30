@@ -396,6 +396,28 @@ def _set_job_progress(job, *, current=None, total=None, status=None):
     job.save(update_fields=fields)
 
 
+
+# Limite máximo de linhas por planilha no modo sync (sem worker).
+# Protege contra timeout no Render free tier (~120s).
+# Em modo async com worker, o limite pode ser maior sem risco.
+IMPORT_MAX_ROWS_SYNC = 500
+IMPORT_MAX_ROWS_ASYNC = 5000
+
+
+def check_row_limit(total_rows, *, async_mode=False):
+    """
+    Levanta ValueError se a planilha exceder o limite permitido para o modo atual.
+    Deve ser chamado antes de qualquer processamento.
+    """
+    limit = IMPORT_MAX_ROWS_ASYNC if async_mode else IMPORT_MAX_ROWS_SYNC
+    if total_rows > limit:
+        modo = 'assíncrono' if async_mode else 'síncrono'
+        raise ValueError(
+            f'A planilha contém {total_rows} linhas, mas o limite no modo {modo} é {limit}. '
+            f'Divida o arquivo em partes menores e importe separadamente.'
+        )
+
+
 def process_import_job(job):
     job.workbook.open('rb')
     try:
@@ -405,6 +427,21 @@ def process_import_job(job):
 
     workbook = openpyxl.load_workbook(BytesIO(payload))
     total_rows = count_workbook_rows(workbook)
+
+    # Verifica limite de linhas antes de qualquer processamento.
+    # async_mode=True quando há worker rodando (IMPORT_MODE=async).
+    from django.conf import settings
+    async_mode = getattr(settings, 'IMPORT_MODE', 'sync') == 'async'
+    try:
+        check_row_limit(total_rows, async_mode=async_mode)
+    except ValueError as exc:
+        job.status = ImportJob.STATUS_FAILED
+        job.error_messages = [make_import_error('Planilha', '', exc)]
+        job.finished_at = timezone.now()
+        job.last_heartbeat = timezone.now()
+        job.save(update_fields=['status', 'error_messages', 'finished_at', 'last_heartbeat', 'updated_at'])
+        return job
+
     preview_summary, preview_errors, preview = build_import_preview(workbook, job.participant, job.created_by, persist=False)
 
     job.summary = serialize_payload_for_json(preview_summary)
