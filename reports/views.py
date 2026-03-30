@@ -203,17 +203,157 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
 
 class ImportTemplateDownloadView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        COR_HEADER  = "005B78"
+        COR_OBRIG   = "E6F4F8"
+        COR_AUTO    = "E8F5E9"
+        COR_INFO    = "FFF8E1"
+        COR_TITULO  = "003D52"
+        borda = Border(
+            left=Side(style='thin', color='CCCCCC'),
+            right=Side(style='thin', color='CCCCCC'),
+            top=Side(style='thin', color='CCCCCC'),
+            bottom=Side(style='thin', color='CCCCCC'),
+        )
+
+        def hdr(ws, row, col, text, width=18, auto=False):
+            c = ws.cell(row=row, column=col, value=text)
+            c.font = Font(bold=True, color="FFFFFF", name='Arial', size=10)
+            c.fill = PatternFill("solid", fgColor="1A7A5E" if auto else COR_HEADER)
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            c.border = borda
+            ws.column_dimensions[get_column_letter(col)].width = width
+
+        def cell(ws, row, col, value=None, bg=COR_OBRIG, italic=False):
+            c = ws.cell(row=row, column=col, value=value)
+            c.fill = PatternFill("solid", fgColor=bg)
+            c.font = Font(italic=italic, name='Arial', size=10)
+            c.alignment = Alignment(vertical='center', wrap_text=True)
+            c.border = borda
+
+        def title(ws, row, text, ncols, bg=COR_TITULO):
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+            c = ws.cell(row=row, column=1, value=text)
+            c.font = Font(bold=True, color="FFFFFF", name='Arial', size=11)
+            c.fill = PatternFill("solid", fgColor=bg)
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[row].height = 28
+
+        def info(ws, row, col1, col2, t, d, bg="FFFFFF"):
+            ws.row_dimensions[row].height = 38
+            for col, val in ((col1, t), (col2, d)):
+                c = ws.cell(row=row, column=col, value=val)
+                c.font = Font(bold=(col == col1), name='Arial', size=10)
+                c.fill = PatternFill("solid", fgColor=bg)
+                c.alignment = Alignment(wrap_text=True, vertical='center')
+                c.border = borda
+
         wb = openpyxl.Workbook()
-        ws1 = wb.active
-        ws1.title = 'Entradas'
-        ws1.append(['data', 'documento', 'fornecedor', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'observacoes'])
-        ws1.append(['2026-03-18', 'NF-ENT-001', 'Fornecedor Exemplo', 'Toras e Toretes 100%', 10, 't', 'FSC 100%', 'L001', 'Exemplo'])
-        ws2 = wb.create_sheet('Saidas')
-        ws2.append(['data', 'documento', 'cliente', 'produto', 'quantidade', 'unidade', 'declaracao_fsc', 'lote', 'observacoes'])
-        ws2.append(['2026-03-18', 'NF-SAI-001', 'Cliente Exemplo', 'Madeira Serrada 100%', 2, 'm3', 'FSC 100%', 'L001', 'Exemplo'])
-        ws3 = wb.create_sheet('Transformacoes')
-        ws3.append(['data', 'documento', 'cliente_final', 'produto_origem', 'produto_destino', 'quantidade_produzida', 'unidade_destino', 'observacoes'])
-        ws3.append(['2026-03-18', 'TRF-001', 'Cliente Exemplo', 'Toras e Toretes 100%', 'Madeira Serrada 100%', 5, 'm3', 'Informe a produção final; o sistema calcula automaticamente o consumo da origem.'])
+
+        # ── Leia Antes ──────────────────────────────────────────
+        wi = wb.active
+        wi.title = "Leia Antes"
+        wi.sheet_view.showGridLines = False
+        wi.column_dimensions['A'].width = 34
+        wi.column_dimensions['B'].width = 60
+
+        title(wi, 1, "MODELO DE IMPORTAÇÃO FSC – SOLUFOR", 2)
+        title(wi, 2, "FLUXO DE PREENCHIMENTO", 2, bg="006E91")
+        info(wi, 3, 1, 2, "1. Preencha Entradas",
+             "Informe: data, número do documento (ex: NF-0001), fornecedor, produto, quantidade, unidade e declaração FSC.", COR_OBRIG)
+        info(wi, 4, 1, 2, "2. Preencha Saidas",
+             "No campo documento_origem informe o número exato do documento da entrada que gerou este lote (ex: NF-0001). O sistema localiza o lote correto automaticamente.", COR_AUTO)
+        info(wi, 5, 1, 2, "3. Preencha Transformacoes",
+             "Igual à saída: informe documento_origem com o número do documento da entrada. O sistema identifica o produto de origem e calcula o consumo pela regra de rendimento.", COR_AUTO)
+        info(wi, 6, 1, 2, "4. documento_origem em branco",
+             "Se deixar em branco, o sistema aloca por FIFO (ordem de chegada). Sempre prefira preencher para garantir rastreabilidade FSC completa.", COR_INFO)
+        title(wi, 7, "LEGENDA DE CORES", 2, bg="006E91")
+        info(wi, 8,  1, 2, "Azul claro  → Obrigatório",    "Preencha antes de importar.", COR_OBRIG)
+        info(wi, 9,  1, 2, "Verde claro → Informativo",    "Preenchido automaticamente pelo sistema. NÃO precisa preencher.", COR_AUTO)
+        info(wi, 10, 1, 2, "Amarelo     → Instrução",      "Leia com atenção antes de preencher.", COR_INFO)
+        title(wi, 11, "UNIDADES ACEITAS", 2, bg="006E91")
+        info(wi, 12, 1, 2, "m3", "Metro cúbico — volumes de toras e madeira serrada.")
+        info(wi, 13, 1, 2, "kg", "Quilograma.")
+        info(wi, 14, 1, 2, "t",  "Tonelada métrica.")
+        info(wi, 15, 1, 2, "un", "Unidade.")
+        title(wi, 16, "DECLARAÇÕES FSC COMUNS", 2, bg="006E91")
+        info(wi, 17, 1, 2, "FSC 100%",           "Toda a madeira é de origem FSC certificada.")
+        info(wi, 18, 1, 2, "FSC Mix",             "Mistura de madeira FSC e controlada.")
+        info(wi, 19, 1, 2, "FSC Controlled Wood", "Madeira de origem controlada FSC.")
+
+        # ── Entradas ─────────────────────────────────────────────
+        we = wb.create_sheet("Entradas")
+        we.sheet_view.showGridLines = False
+        we.freeze_panes = "A2"
+        we.row_dimensions[1].height = 30
+        cols_e = [("data",16),("documento",22),("fornecedor",28),("produto",24),
+                  ("quantidade",14),("unidade",12),("declaracao_fsc",20),("lote",16),("observacoes",30)]
+        for i, (n, w) in enumerate(cols_e, 1):
+            hdr(we, 1, i, n, w)
+        ex_e = ["2026-03-18", "NF-0001", "Berneck S/A", "Toras e Toretes", 45, "t", "FSC 100%", "L001", "Compra inicial de toras"]
+        for i, v in enumerate(ex_e, 1):
+            cell(we, 2, i, v, COR_OBRIG)
+        for row in range(3, 302):
+            we.row_dimensions[row].height = 18
+            for col in range(1, 10):
+                cell(we, row, col, None, COR_OBRIG)
+
+        # ── Saidas ───────────────────────────────────────────────
+        ws = wb.create_sheet("Saidas")
+        ws.sheet_view.showGridLines = False
+        ws.freeze_panes = "A3"
+        ws.row_dimensions[1].height = 34
+        ws.merge_cells('A1:I1')
+        c = ws.cell(row=1, column=1,
+                    value='⚠ documento_origem = número do documento da ENTRADA que gerou este lote (ex: NF-0001). Deixe em branco para alocação FIFO automática.')
+        c.font = Font(bold=True, name='Arial', size=10, color="7B3F00")
+        c.fill = PatternFill("solid", fgColor=COR_INFO)
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        ws.row_dimensions[2].height = 30
+        cols_s = [("data",16,False),("documento",22,False),("cliente",28,False),
+                  ("documento_origem",22,False),("produto",24,True),
+                  ("quantidade",14,False),("unidade",12,False),("declaracao_fsc",20,False),("observacoes",30,False)]
+        for i, (n, w, auto) in enumerate(cols_s, 1):
+            hdr(ws, 2, i, n, w, auto=auto)
+        ex_s = ["2026-03-20","NF-0010","Tramontina","NF-0001","← sistema identifica",40,"t","FSC 100%","Baixa parcial"]
+        bgs_s = [COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4
+        for i, (v, bg) in enumerate(zip(ex_s, bgs_s), 1):
+            cell(ws, 3, i, v, bg, italic=(bg == COR_AUTO))
+        for row in range(4, 302):
+            ws.row_dimensions[row].height = 18
+            for col, bg in enumerate([COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4, 1):
+                cell(ws, row, col, None, bg)
+
+        # ── Transformacoes ───────────────────────────────────────
+        wt = wb.create_sheet("Transformacoes")
+        wt.sheet_view.showGridLines = False
+        wt.freeze_panes = "A3"
+        wt.row_dimensions[1].height = 34
+        wt.merge_cells('A1:I1')
+        c = wt.cell(row=1, column=1,
+                    value='⚠ documento_origem = número do documento da ENTRADA de origem (ex: NF-0001). produto_origem é identificado automaticamente pelo sistema a partir deste campo.')
+        c.font = Font(bold=True, name='Arial', size=10, color="7B3F00")
+        c.fill = PatternFill("solid", fgColor=COR_INFO)
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        wt.row_dimensions[2].height = 30
+        cols_t = [("data",16,False),("documento",22,False),("cliente_final",28,False),
+                  ("documento_origem",22,False),("produto_origem",24,True),
+                  ("produto_destino",24,False),("quantidade_produzida",16,False),
+                  ("unidade_destino",14,False),("observacoes",30,False)]
+        for i, (n, w, auto) in enumerate(cols_t, 1):
+            hdr(wt, 2, i, n, w, auto=auto)
+        ex_t = ["2026-03-25","OP-0001","Tramontina","NF-0001","← sistema identifica","Madeira Serrada",12,"m3","Serrado a partir de toras"]
+        bgs_t = [COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4
+        for i, (v, bg) in enumerate(zip(ex_t, bgs_t), 1):
+            cell(wt, 3, i, v, bg, italic=(bg == COR_AUTO))
+        for row in range(4, 302):
+            wt.row_dimensions[row].height = 18
+            for col, bg in enumerate([COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4, 1):
+                cell(wt, row, col, None, bg)
+
+        wb.active = wi
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename=modelo_importacao_fsc.xlsx'
         wb.save(response)

@@ -180,6 +180,38 @@ def _get_or_create_counterparty(participant, name, *, type_, create_if_missing=T
     return Counterparty.objects.filter(participant=participant, name=normalized_name).first()
 
 
+def _resolve_preferred_lot(participant, documento_origem, product=None):
+    """
+    Busca o TraceLot pelo número do documento da entrada de origem.
+    Aceita tanto o número do documento (ex: 'NF-0001') quanto o código do lote.
+    Retorna o TraceLot encontrado ou None se não informado.
+    Levanta ValueError se o documento foi informado mas não foi encontrado.
+    """
+    ref = safe_str(documento_origem)
+    if not ref:
+        return None
+
+    qs = TraceLot.objects.filter(participant=participant, source_type='entry')
+    if product:
+        qs = qs.filter(product=product)
+
+    # Tenta por número do documento da entrada
+    lot = qs.filter(entry__document_number=ref).first()
+    if lot:
+        return lot
+
+    # Tenta por código do lote da entrada
+    lot = qs.filter(entry__batch_code=ref).first()
+    if lot:
+        return lot
+
+    raise ValueError(
+        f'documento_origem "{ref}" não encontrado. '
+        f'Verifique se o número do documento da entrada foi digitado corretamente '
+        f'e se a entrada já foi importada.'
+    )
+
+
 def build_import_preview(workbook, participant, user, persist=False):
     summary = {'entries': 0, 'sales': 0, 'transformations': 0}
     errors = []
@@ -267,6 +299,15 @@ def build_import_preview(workbook, participant, user, persist=False):
                 quantidade = decimal_value(quantidade)
                 unidade = safe_str(unidade) or product.unit
                 quantity_base = convert_to_base(product, quantidade, unidade)
+
+                # Resolve lote preferencial via documento_origem (novo) ou id_lote_origem (legado).
+                documento_origem = safe_str(first_present(row, 'documento_origem'))
+                preferred_lot = _resolve_preferred_lot(participant, documento_origem, product=product) if persist else None
+                if not preferred_lot and persist:
+                    lot_id = safe_str(first_present(row, 'id_lote_origem'))
+                    if lot_id:
+                        preferred_lot = TraceLot.objects.get(pk=lot_id, participant=participant, product=product)
+
                 preview = {
                     'linha': idx,
                     'data': data,
@@ -276,14 +317,11 @@ def build_import_preview(workbook, participant, user, persist=False):
                     'quantity': quantidade,
                     'unit': unidade,
                     'quantity_base': quantity_base,
+                    'documento_origem': documento_origem or '(FIFO automático)',
                 }
                 previews['sales'].append(preview)
                 summary['sales'] += 1
                 if persist:
-                    preferred_lot = None
-                    lot_id = safe_str(first_present(row, 'id_lote_origem'))
-                    if lot_id:
-                        preferred_lot = TraceLot.objects.get(pk=lot_id, participant=participant, product=product)
                     obj = SaleRecord.objects.create(
                         participant=participant,
                         movement_date=normalize_date(data),
@@ -319,7 +357,21 @@ def build_import_preview(workbook, participant, user, persist=False):
                 target_unit = first_present(row, 'unidade_destino', 'unidade')
                 observacoes = first_present(row, 'observacoes')
 
-                source_product = _coerce_product(source_product_name)
+                documento_origem = safe_str(first_present(row, 'documento_origem'))
+
+                # Se documento_origem informado, deriva produto_origem do lote automaticamente.
+                # Caso contrário, exige que produto_origem seja preenchido na planilha.
+                if documento_origem and persist:
+                    lot_for_source = _resolve_preferred_lot(participant, documento_origem)
+                    if lot_for_source:
+                        source_product = lot_for_source.product
+                    else:
+                        source_product = _coerce_product(source_product_name)
+                elif safe_str(source_product_name) and safe_str(source_product_name) != '← preenchido pelo sistema':
+                    source_product = _coerce_product(source_product_name)
+                else:
+                    raise ValueError('Informe produto_origem ou documento_origem para identificar a origem da transformação.')
+
                 # CORREÇÃO: só cria produto destino durante a gravação real (persist=True).
                 target_product = _coerce_product(target_product_name, default_unit=safe_str(target_unit) or 'm3', create_if_missing=persist)
                 rule = get_transformation_rule(source_product, target_product, participant=participant)
@@ -338,6 +390,7 @@ def build_import_preview(workbook, participant, user, persist=False):
                     'data': data,
                     'document_number': safe_str(documento),
                     'customer': safe_str(cliente_nome),
+                    'documento_origem': documento_origem or '(FIFO automático)',
                     'source_product': source_product.name,
                     'source_quantity_base': source_quantity_base,
                     'source_unit': source_product.unit,
@@ -350,10 +403,11 @@ def build_import_preview(workbook, participant, user, persist=False):
                 previews['transformations'].append(preview)
                 summary['transformations'] += 1
                 if persist:
-                    preferred_lot = None
-                    lot_id = safe_str(first_present(row, 'id_lote_origem'))
-                    if lot_id:
-                        preferred_lot = TraceLot.objects.get(pk=lot_id, participant=participant, product=source_product)
+                    preferred_lot = _resolve_preferred_lot(participant, documento_origem, product=source_product)
+                    if not preferred_lot:
+                        lot_id = safe_str(first_present(row, 'id_lote_origem'))
+                        if lot_id:
+                            preferred_lot = TraceLot.objects.get(pk=lot_id, participant=participant, product=source_product)
                     # CORREÇÃO: só cria cliente durante a gravação real (persist=True).
                     customer = _get_or_create_counterparty(participant, cliente_nome, type_='customer', create_if_missing=True) if safe_str(cliente_nome) else None
                     obj = TransformationRecord.objects.create(
