@@ -202,9 +202,21 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
 
 
 class ImportTemplateDownloadView(LoginRequiredMixin, View):
+    CACHE_KEY = 'import_template_xlsx_v2'
+    CACHE_TTL = 60 * 60 * 24  # 24 horas
+
     def get(self, request, *args, **kwargs):
+        from io import BytesIO
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
+
+        # Serve do cache se disponível — evita regenerar a cada clique
+        cached = cache.get(self.CACHE_KEY)
+        if cached:
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = 'attachment; filename=modelo_importacao_fsc.xlsx'
+            response.write(cached)
+            return response
 
         COR_HEADER  = "005B78"
         COR_OBRIG   = "E6F4F8"
@@ -295,7 +307,7 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
         ex_e = ["2026-03-18", "NF-0001", "Berneck S/A", "Toras e Toretes", 45, "t", "FSC 100%", "L001", "Compra inicial de toras"]
         for i, v in enumerate(ex_e, 1):
             cell(we, 2, i, v, COR_OBRIG)
-        for row in range(3, 302):
+        for row in range(3, 52):
             we.row_dimensions[row].height = 18
             for col in range(1, 10):
                 cell(we, row, col, None, COR_OBRIG)
@@ -321,7 +333,7 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
         bgs_s = [COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4
         for i, (v, bg) in enumerate(zip(ex_s, bgs_s), 1):
             cell(ws, 3, i, v, bg, italic=(bg == COR_AUTO))
-        for row in range(4, 302):
+        for row in range(4, 52):
             ws.row_dimensions[row].height = 18
             for col, bg in enumerate([COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4, 1):
                 cell(ws, row, col, None, bg)
@@ -348,15 +360,20 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
         bgs_t = [COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4
         for i, (v, bg) in enumerate(zip(ex_t, bgs_t), 1):
             cell(wt, 3, i, v, bg, italic=(bg == COR_AUTO))
-        for row in range(4, 302):
+        for row in range(4, 52):
             wt.row_dimensions[row].height = 18
             for col, bg in enumerate([COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4, 1):
                 cell(wt, row, col, None, bg)
 
         wb.active = wi
+        buffer = BytesIO()
+        wb.save(buffer)
+        xlsx_bytes = buffer.getvalue()
+        cache.set(self.CACHE_KEY, xlsx_bytes, self.CACHE_TTL)
+
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename=modelo_importacao_fsc.xlsx'
-        wb.save(response)
+        response.write(xlsx_bytes)
         return response
 
 
