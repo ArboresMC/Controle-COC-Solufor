@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
@@ -6,7 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('compliance', '0001_initial'),
-        ('accounts', '0001_initial'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
@@ -51,8 +52,7 @@ class Migration(migrations.Migration):
                     WHERE table_name='compliance_monthlyclosing' AND column_name='reviewed_by_id'
                 ) THEN
                     ALTER TABLE compliance_monthlyclosing
-                    ADD COLUMN reviewed_by_id INTEGER NULL
-                    REFERENCES accounts_customuser(id) ON DELETE SET NULL;
+                    ADD COLUMN reviewed_by_id INTEGER NULL;
                 END IF;
             END
             $$;
@@ -98,7 +98,7 @@ class Migration(migrations.Migration):
                         blank=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name='reviewed_closings',
-                        to='accounts.customuser',
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
