@@ -312,33 +312,16 @@ def build_import_preview(workbook, participant, user, persist=False):
 
                 # Se produto vier com texto informativo do modelo (ex: "← sistema identifica"),
                 # ignora e deriva o produto a partir do documento_origem.
-                produto_nome_limpo = safe_str(produto_nome)
-                produto_e_informativo = not produto_nome_limpo or u'\u2190' in produto_nome_limpo
-
-                if produto_e_informativo and documento_origem:
-                    if persist:
-                        # Gravação real: lotes da fase 1 já existem, busca obrigatória.
-                        lot_ref = _resolve_preferred_lot(participant, documento_origem)
-                        if lot_ref:
-                            product = lot_ref.product
-                        else:
-                            raise ValueError(f'documento_origem "{documento_origem}" não encontrado. Verifique se o número do documento da entrada foi digitado corretamente.')
-                    else:
-                        # Preview: entradas ainda não gravadas, aceita documento_origem sem verificar no banco.
-                        # Usa qualquer produto existente só para continuar a validação dos demais campos.
-                        product = Product.objects.first()
-                        if not product:
-                            raise ValueError('Nenhum produto cadastrado. Cadastre produtos antes de importar.')
-                elif produto_e_informativo:
-                    raise ValueError('Informe o produto ou o documento_origem para identificar o lote de origem.')
-                else:
-                    product = _coerce_product(produto_nome_limpo)
+                # Produto é sempre informado diretamente na saída (igual à entrada).
+                # A coluna produto no modelo é obrigatória e azul.
+                product = _coerce_product(safe_str(produto_nome))
 
                 customer_name = safe_str(cliente_nome)
                 if not customer_name:
                     raise ValueError('Cliente não informado.')
                 customer = _get_or_create_counterparty(participant, customer_name, type_='customer', create_if_missing=persist)
                 quantidade = decimal_value(quantidade)
+
                 unidade = safe_str(unidade) or product.unit
                 quantity_base = convert_to_base(product, quantidade, unidade)
 

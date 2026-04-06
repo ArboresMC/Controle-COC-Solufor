@@ -325,18 +325,18 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
         c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         ws.row_dimensions[2].height = 30
         cols_s = [("data",16,False),("documento",22,False),("cliente",28,False),
-                  ("documento_origem",22,False),("produto",24,True),
+                  ("documento_origem",22,False),("produto",24,False),
                   ("quantidade",14,False),("unidade",12,False),("declaracao_fsc",20,False),("observacoes",30,False)]
         for i, (n, w, auto) in enumerate(cols_s, 1):
             hdr(ws, 2, i, n, w, auto=auto)
-        ex_s = ["2026-03-20","NF-0010","Tramontina","NF-0001","← sistema identifica",40,"t","FSC 100%","Baixa parcial"]
-        bgs_s = [COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4
+        ex_s = ["2026-03-20","NF-0010","Tramontina","NF-0001","Toras e Toretes",40,"t","FSC 100%","Baixa parcial"]
+        bgs_s = [COR_OBRIG]*5 + [COR_OBRIG]*4
         for i, (v, bg) in enumerate(zip(ex_s, bgs_s), 1):
             cell(ws, 3, i, v, bg, italic=(bg == COR_AUTO))
         for row in range(4, 52):
             ws.row_dimensions[row].height = 18
-            for col, bg in enumerate([COR_OBRIG]*4 + [COR_AUTO] + [COR_OBRIG]*4, 1):
-                cell(ws, row, col, None, bg)
+            for col in range(1, 10):
+                cell(ws, row, col, None, COR_OBRIG)
 
         # ── Transformacoes ───────────────────────────────────────
         wt = wb.create_sheet("Transformacoes")
