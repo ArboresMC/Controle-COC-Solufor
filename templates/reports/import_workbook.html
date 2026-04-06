@@ -47,7 +47,7 @@
       <div>
         <div class="kicker">Importação inteligente</div>
         <h2 class="card-title">Validar e importar planilha</h2>
-        <p class="card-subtitle">A validação continua imediata. A importação agora entra em fila e é processada em background.</p>
+        <p class="card-subtitle">Valide a planilha primeiro. Após validação sem erros, confirme para importar.</p>
       </div>
       <a class="btn secondary" href="/reports/import-template.xlsx">Baixar modelo</a>
     </div>
@@ -57,29 +57,26 @@
       {{ form.as_p }}
 
       <div class="actions" id="import-actions">
-        <button class="btn secondary" type="submit" name="action" value="validate" data-idle-label="Validar planilha" data-busy-label="Validando...">
+        <button class="btn" type="submit" name="action" value="validate" data-idle-label="Validar planilha" data-busy-label="Validando...">
           <span class="btn-label">Validar planilha</span>
-        </button>
-        <button class="btn" type="submit" name="action" value="import" data-idle-label="Enviar para fila" data-busy-label="Enviando...">
-          <span class="btn-label">Enviar para fila</span>
         </button>
       </div>
 
       <div class="import-note" id="import-note" aria-live="polite">
         <span class="import-spinner" aria-hidden="true"></span>
-        <span id="import-note-text">Processando arquivo. Não feche nem atualize esta página até a conclusão.</span>
+        <span id="import-note-text">Validando planilha. Aguarde a análise do arquivo.</span>
       </div>
 
       <div class="import-hint">
-        Na ação de importar, o arquivo é validado e entra em fila. Você pode sair da página enquanto o worker conclui o job.
+        Após validação sem erros, aparecerá um card verde para confirmar a importação sem precisar selecionar o arquivo novamente.
       </div>
     </form>
   </div>
 
   <div class="card soft">
     <div class="stack">
-      <div class="info-box"><strong>Validação antes de gravar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios antes de colocar o arquivo na fila.</span></div>
-      <div class="info-box"><strong>Processamento assíncrono</strong><br><span class="muted">A gravação real roda em background via ImportJob + worker, sem travar a requisição.</span></div>
+      <div class="info-box"><strong>1. Validar</strong><br><span class="muted">O sistema verifica produto, unidade, saldo e dados obrigatórios sem gravar nada.</span></div>
+      <div class="info-box"><strong>2. Confirmar</strong><br><span class="muted">Após validação sem erros, clique em "Confirmar importação" no card verde. Não é necessário selecionar o arquivo novamente.</span></div>
       <div class="info-box"><strong>Histórico de jobs</strong><br><span class="muted">Acompanhe pendente, processando, concluído ou falhou com detalhes logo abaixo.</span></div>
     </div>
   </div>
@@ -96,7 +93,7 @@
 
 {% if preview.entries or preview.sales or preview.transformations %}
 <div class="card">
-  <div class="card-header"><div><div class="kicker">Prévia</div><h2 class="card-title">Resumo da planilha validada</h2><p class="card-subtitle">Confira abaixo o que o sistema identificou antes de criar o job.</p></div></div>
+  <div class="card-header"><div><div class="kicker">Prévia</div><h2 class="card-title">Resumo da planilha validada</h2><p class="card-subtitle">Confira abaixo o que o sistema identificou antes de importar.</p></div></div>
   <div class="grid metrics">
     <div class="card metric-card"><div class="metric-label">Entradas</div><div class="metric-value">{{ preview.entries|length }}</div></div>
     <div class="card metric-card"><div class="metric-label">Saídas</div><div class="metric-value">{{ preview.sales|length }}</div></div>
@@ -246,40 +243,17 @@
     const noteText = document.getElementById('import-note-text');
     if (form && actions && note && noteText) {
       let busy = false;
-      function setBusy(button) {
-        if (busy) return false;
+      form.addEventListener('submit', function (event) {
+        if (busy) { event.preventDefault(); return; }
         busy = true;
-        const action = button?.value || '';
         actions.classList.add('is-busy');
         note.classList.add('is-visible');
-        if (action === 'import') {
-          noteText.textContent = 'Validando arquivo e criando job de importação. Aguarde.';
-        } else if (action === 'validate') {
-          noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
-        } else {
-          noteText.textContent = 'Processando arquivo. Aguarde.';
-        }
+        noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
         actions.querySelectorAll('button').forEach((btn) => {
           btn.disabled = true;
           const label = btn.querySelector('.btn-label');
-          if (label) label.textContent = btn.dataset.busyLabel || 'Processando...';
+          if (label) label.textContent = btn.dataset.busyLabel || 'Validando...';
         });
-        if (button) {
-          button.disabled = false;
-          const label = button.querySelector('.btn-label');
-          if (label) label.textContent = button.dataset.busyLabel || 'Processando...';
-        }
-        return true;
-      }
-      actions.querySelectorAll('button[type="submit"]').forEach((button) => {
-        button.addEventListener('click', function () {
-          actions.querySelectorAll('button[type="submit"]').forEach((btn) => delete btn.dataset.clicked);
-          this.dataset.clicked = '1';
-        });
-      });
-      form.addEventListener('submit', function (event) {
-        const clickedButton = actions.querySelector('button[data-clicked="1"]') || document.activeElement;
-        if (!setBusy(clickedButton)) event.preventDefault();
       });
     }
 

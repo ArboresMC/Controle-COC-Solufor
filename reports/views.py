@@ -40,11 +40,10 @@ from transactions.services import (
 from .forms import ImportWorkbookForm
 from .models import ImportJob
 from .services import (
-build_import_error_workbook,
+    build_import_error_workbook,
     build_import_preview,
     count_workbook_rows,
     humanize_import_errors,
-
 )
 
 
@@ -63,11 +62,9 @@ def _serialize_json_safe(value):
     return value
 
 
-
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
         return self.request.user.is_manager
-
 
 
 class ConsolidatedExcelReportView(ManagerRequiredMixin, View):
@@ -213,7 +210,6 @@ class ImportTemplateDownloadView(LoginRequiredMixin, View):
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
 
-        # Serve do cache se disponível — evita regenerar a cada clique
         cached = cache.get(self.CACHE_KEY)
         if cached:
             response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -415,7 +411,6 @@ def _get_visible_import_job(request, job_id):
     return _get_import_jobs_queryset(request).filter(pk=job_id).first()
 
 
-
 class ImportWorkbookView(LoginRequiredMixin, View):
     template_name = 'reports/import_workbook.html'
 
@@ -465,7 +460,7 @@ class ImportWorkbookView(LoginRequiredMixin, View):
         request.session[session_key] = {
             'path': tmp.name,
             'filename': getattr(uploaded_file, 'name', 'planilha.xlsx'),
-            'participant_id': None,  # preenchido pelo chamador
+            'participant_id': None,
         }
         return token
 
@@ -523,7 +518,10 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             self._cleanup_temp_file(request, token)
             return self._do_import(request, participant, tmp_file, filename)
 
-        # ── Upload normal ─────────────────────────────────────────
+        # ── Validação (único caminho via form de upload) ──────────
+        # O botão "Enviar para fila" foi removido do template.
+        # Todo upload passa por validação primeiro; a importação real
+        # só ocorre via action=confirm no confirm-card.
         form = self._build_form(request, request.POST, request.FILES)
         if not form.is_valid():
             return self._render(request, form)
@@ -537,23 +535,21 @@ class ImportWorkbookView(LoginRequiredMixin, View):
         workbook = openpyxl.load_workbook(uploaded_file)
         summary, errors, preview = build_import_preview(workbook, participant, request.user, persist=False)
 
-        if action == 'validate' or errors:
-            validated_token = None
-            validated_filename = None
-            if not errors:
-                # Salva arquivo em temp para evitar re-upload na confirmação
-                validated_token = self._save_temp_file(request, uploaded_file)
-                validated_filename = getattr(uploaded_file, 'name', 'planilha.xlsx')
-                request.session[f'import_tmp_{validated_token}']['participant_id'] = participant.pk
-                request.session.modified = True
-            if errors:
-                messages.warning(request, f'Validação concluída com {len(errors)} inconsistências. Corrija a planilha antes de importar.')
-            else:
-                messages.success(request, 'Validação concluída sem inconsistências. Confirme para importar.')
-            return self._render(request, form, preview=preview, errors=errors, summary=summary,
-                                validated_token=validated_token, validated_filename=validated_filename)
+        validated_token = None
+        validated_filename = None
+        if not errors:
+            validated_token = self._save_temp_file(request, uploaded_file)
+            validated_filename = getattr(uploaded_file, 'name', 'planilha.xlsx')
+            request.session[f'import_tmp_{validated_token}']['participant_id'] = participant.pk
+            request.session.modified = True
 
-        return self._do_import(request, participant, uploaded_file, getattr(uploaded_file, 'name', 'planilha.xlsx'))
+        if errors:
+            messages.warning(request, f'Validação concluída com {len(errors)} inconsistências. Corrija a planilha antes de importar.')
+        else:
+            messages.success(request, 'Validação concluída sem inconsistências. Confirme para importar.')
+
+        return self._render(request, form, preview=preview, errors=errors, summary=summary,
+                            validated_token=validated_token, validated_filename=validated_filename)
 
     def _do_import(self, request, participant, uploaded_file, filename):
         """Executa a importação real (sync ou async)."""
@@ -592,4 +588,3 @@ class ImportWorkbookView(LoginRequiredMixin, View):
         )
         messages.success(request, f'Importação enviada para a fila com sucesso. Job #{job.pk} criado para {filename or "planilha"}.')
         return redirect(f"{reverse('report_import_workbook')}?job={job.pk}")
-
