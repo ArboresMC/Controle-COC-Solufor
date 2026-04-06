@@ -226,6 +226,12 @@ def _resolve_preferred_lot(participant, documento_origem, product=None):
 
 
 def build_import_preview(workbook, participant, user, persist=False):
+    """
+    Processa a planilha em duas fases quando persist=True:
+      Fase 1 — Entradas: grava todas as entradas e seus lotes.
+      Fase 2 — Saídas e Transformações: agora encontram os lotes da fase 1.
+    No modo preview (persist=False) tudo roda sem gravar, apenas validando.
+    """
     summary = {'entries': 0, 'sales': 0, 'transformations': 0}
     errors = []
     previews = {'entries': [], 'sales': [], 'transformations': []}
@@ -499,6 +505,100 @@ def check_row_limit(total_rows, *, async_mode=False):
         )
 
 
+def _process_entries_only(workbook, participant, user):
+    """Fase 1: processa apenas a aba Entradas com persist=True."""
+    summary = {'entries': 0, 'sales': 0, 'transformations': 0}
+    errors = []
+    previews = {'entries': [], 'sales': [], 'transformations': []}
+
+    if 'Entradas' not in workbook.sheetnames:
+        return summary, errors, previews
+
+    sheet = workbook['Entradas']
+    for idx, row in sheet_rows(sheet):
+        try:
+            data = first_present(row, 'data')
+            if not data:
+                raise ValueError('Data não informada.')
+            documento = first_present(row, 'documento')
+            fornecedor_nome = first_present(row, 'fornecedor')
+            produto_nome = first_present(row, 'produto')
+            quantidade = first_present(row, 'quantidade')
+            unidade = first_present(row, 'unidade')
+            declaracao = first_present(row, 'declaracao_fsc')
+            lote = first_present(row, 'lote')
+            observacoes = first_present(row, 'observacoes')
+
+            unidade = safe_str(unidade) or 'm3'
+            product = _coerce_product(produto_nome, default_unit=unidade, create_if_missing=True)
+            supplier_name = safe_str(fornecedor_nome) or 'Não informado'
+            supplier = _get_or_create_counterparty(participant, supplier_name, type_='supplier', create_if_missing=True)
+            quantidade = decimal_value(quantidade)
+            quantity_base = convert_to_base(product, quantidade, unidade)
+            previews['entries'].append({
+                'linha': idx, 'data': data, 'documento': safe_str(documento),
+                'supplier': supplier_name, 'product': product.name,
+                'quantity': quantidade, 'unit': unidade, 'quantity_base': quantity_base,
+            })
+            summary['entries'] += 1
+            obj = EntryRecord.objects.create(
+                participant=participant,
+                movement_date=normalize_date(data),
+                document_number=safe_str(documento),
+                supplier=supplier,
+                product=product,
+                quantity=quantidade,
+                movement_unit=unidade,
+                unit_snapshot=product.unit,
+                quantity_base=quantity_base,
+                fsc_claim=safe_str(declaracao),
+                batch_code=safe_str(lote),
+                notes=safe_str(observacoes),
+                created_by=user,
+                status='submitted',
+            )
+            sync_entry_lot(obj)
+        except Exception as exc:
+            errors.append(make_import_error('Entradas', idx, exc, row))
+
+    return summary, errors, previews
+
+
+def _process_sales_and_transformations(workbook, participant, user):
+    """Fase 2: processa Saidas e Transformacoes com persist=True.
+    As entradas já foram gravadas na Fase 1, então os lotes já existem.
+    """
+    summary = {'entries': 0, 'sales': 0, 'transformations': 0}
+    errors = []
+    previews = {'entries': [], 'sales': [], 'transformations': []}
+
+    # Reutiliza build_import_preview só para saídas e transformações
+    # passando um workbook sem a aba Entradas para evitar reprocessamento.
+    from openpyxl import Workbook as _Workbook
+    wb_partial = _Workbook()
+    wb_partial.remove(wb_partial.active)
+
+    for sheet_name in ('Saidas', 'Transformacoes'):
+        if sheet_name in workbook.sheetnames:
+            # Copia a aba para o workbook parcial
+            from openpyxl.utils import get_column_letter
+            src = workbook[sheet_name]
+            dst = wb_partial.create_sheet(sheet_name)
+            for row in src.iter_rows(values_only=True):
+                dst.append(list(row))
+
+    partial_summary, partial_errors, partial_previews = build_import_preview(
+        wb_partial, participant, user, persist=True
+    )
+    summary['sales'] = partial_summary['sales']
+    summary['transformations'] = partial_summary['transformations']
+    previews['sales'] = partial_previews.get('sales', [])
+    previews['transformations'] = partial_previews.get('transformations', [])
+    errors = partial_errors
+
+    return summary, errors, previews
+
+
 def process_import_job(job):
     job.workbook.open('rb')
     try:
@@ -543,9 +643,33 @@ def process_import_job(job):
     workbook = openpyxl.load_workbook(BytesIO(payload))
     try:
         with transaction.atomic():
-            persisted_summary, persisted_errors, persisted_preview = build_import_preview(workbook, job.participant, job.created_by, persist=True)
-            if persisted_errors:
-                raise ValueError(humanize_import_errors(persisted_errors)[0])
+            # Fase 1 — processa APENAS as entradas e grava os lotes.
+            # Isso garante que saídas e transformações encontrem os lotes
+            # mesmo quando entradas e saídas estão na mesma planilha.
+            phase1_summary, phase1_errors, phase1_preview = _process_entries_only(
+                workbook, job.participant, job.created_by
+            )
+            if phase1_errors:
+                raise ValueError(humanize_import_errors(phase1_errors)[0])
+
+            # Fase 2 — processa saídas e transformações (lotes já existem no banco).
+            phase2_summary, phase2_errors, phase2_preview = _process_sales_and_transformations(
+                workbook, job.participant, job.created_by
+            )
+            if phase2_errors:
+                raise ValueError(humanize_import_errors(phase2_errors)[0])
+
+            persisted_summary = {
+                'entries': phase1_summary['entries'],
+                'sales': phase2_summary['sales'],
+                'transformations': phase2_summary['transformations'],
+            }
+            persisted_preview = {
+                'entries': phase1_preview['entries'],
+                'sales': phase2_preview['sales'],
+                'transformations': phase2_preview['transformations'],
+            }
+            persisted_errors = []
     except Exception as exc:
         job.status = ImportJob.STATUS_FAILED
         job.error_messages = serialize_payload_for_json(preview_errors or [make_import_error('Importação', '', exc)])
