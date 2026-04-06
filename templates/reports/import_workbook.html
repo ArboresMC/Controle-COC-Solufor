@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block content %}
 <style>
@@ -36,6 +35,10 @@
   .mini-stat { border:1px solid rgba(15,23,42,.06); border-radius:14px; padding:12px; background:#fff; }
   .mini-stat .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
   .mini-stat .value { margin-top:6px; font-size:22px; font-weight:800; }
+  .confirm-card { border: 2px solid #047857; background: #ecfdf5; border-radius: var(--radius); padding: 22px; }
+  .confirm-card h2 { color: #047857; margin: 0 0 6px; }
+  .confirm-card p { color: #065f46; margin: 0 0 16px; }
+  .confirm-filename { display:inline-flex; align-items:center; gap:8px; background:#d1fae5; color:#065f46; border-radius:999px; padding:6px 14px; font-weight:700; font-size:13px; margin-bottom:16px; }
 </style>
 
 <div class="split">
@@ -100,6 +103,32 @@
     <div class="card metric-card"><div class="metric-label">Transformações</div><div class="metric-value">{{ preview.transformations|length }}</div></div>
     <div class="card metric-card"><div class="metric-label">Erros</div><div class="metric-value">{{ preview_errors|length }}</div></div>
   </div>
+</div>
+{% endif %}
+
+{% if validated_token and not preview_errors %}
+<div class="confirm-card">
+  <h2>✅ Planilha validada com sucesso</h2>
+  <p>Nenhuma inconsistência encontrada. Confirme abaixo para importar sem precisar selecionar o arquivo novamente.</p>
+  <div class="confirm-filename">
+    📄 {{ validated_filename|default:"planilha.xlsx" }}
+  </div>
+  <form method="post" id="confirm-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    <input type="hidden" name="validated_token" value="{{ validated_token }}">
+    <input type="hidden" name="participant_id" value="{{ form.participant.value|default:'' }}">
+    <div class="actions" id="confirm-actions">
+      <button class="btn" type="submit" data-idle-label="Confirmar importação" data-busy-label="Importando...">
+        <span class="btn-label">Confirmar importação</span>
+      </button>
+      <a class="btn secondary" href="{% url 'report_import_workbook' %}">Cancelar</a>
+    </div>
+    <div class="import-note" id="confirm-note" aria-live="polite">
+      <span class="import-spinner" aria-hidden="true"></span>
+      <span>Importando planilha. Aguarde...</span>
+    </div>
+  </form>
 </div>
 {% endif %}
 
@@ -210,47 +239,64 @@
 
 <script>
   (function () {
+    // Spinner no form principal
     const form = document.getElementById('import-form');
     const actions = document.getElementById('import-actions');
     const note = document.getElementById('import-note');
     const noteText = document.getElementById('import-note-text');
-    if (!form || !actions || !note || !noteText) return;
-    let busy = false;
-    function setBusy(button) {
-      if (busy) return false;
-      busy = true;
-      const action = button?.value || '';
-      actions.classList.add('is-busy');
-      note.classList.add('is-visible');
-      if (action === 'import') {
-        noteText.textContent = 'Validando arquivo e criando job de importação. Aguarde.';
-      } else if (action === 'validate') {
-        noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
-      } else {
-        noteText.textContent = 'Processando arquivo. Aguarde.';
+    if (form && actions && note && noteText) {
+      let busy = false;
+      function setBusy(button) {
+        if (busy) return false;
+        busy = true;
+        const action = button?.value || '';
+        actions.classList.add('is-busy');
+        note.classList.add('is-visible');
+        if (action === 'import') {
+          noteText.textContent = 'Validando arquivo e criando job de importação. Aguarde.';
+        } else if (action === 'validate') {
+          noteText.textContent = 'Validando planilha. Aguarde a análise do arquivo.';
+        } else {
+          noteText.textContent = 'Processando arquivo. Aguarde.';
+        }
+        actions.querySelectorAll('button').forEach((btn) => {
+          btn.disabled = true;
+          const label = btn.querySelector('.btn-label');
+          if (label) label.textContent = btn.dataset.busyLabel || 'Processando...';
+        });
+        if (button) {
+          button.disabled = false;
+          const label = button.querySelector('.btn-label');
+          if (label) label.textContent = button.dataset.busyLabel || 'Processando...';
+        }
+        return true;
       }
-      actions.querySelectorAll('button').forEach((btn) => {
-        btn.disabled = true;
-        const label = btn.querySelector('.btn-label');
-        if (label) label.textContent = btn.dataset.busyLabel || 'Processando...';
+      actions.querySelectorAll('button[type="submit"]').forEach((button) => {
+        button.addEventListener('click', function () {
+          actions.querySelectorAll('button[type="submit"]').forEach((btn) => delete btn.dataset.clicked);
+          this.dataset.clicked = '1';
+        });
       });
-      if (button) {
-        button.disabled = false;
-        const label = button.querySelector('.btn-label');
-        if (label) label.textContent = button.dataset.busyLabel || 'Processando...';
-      }
-      return true;
+      form.addEventListener('submit', function (event) {
+        const clickedButton = actions.querySelector('button[data-clicked="1"]') || document.activeElement;
+        if (!setBusy(clickedButton)) event.preventDefault();
+      });
     }
-    actions.querySelectorAll('button[type="submit"]').forEach((button) => {
-      button.addEventListener('click', function () {
-        actions.querySelectorAll('button[type="submit"]').forEach((btn) => delete btn.dataset.clicked);
-        this.dataset.clicked = '1';
+
+    // Spinner no form de confirmação
+    const confirmForm = document.getElementById('confirm-form');
+    const confirmActions = document.getElementById('confirm-actions');
+    const confirmNote = document.getElementById('confirm-note');
+    if (confirmForm && confirmActions && confirmNote) {
+      confirmForm.addEventListener('submit', function () {
+        confirmActions.querySelectorAll('button[type="submit"]').forEach(btn => {
+          btn.disabled = true;
+          const label = btn.querySelector('.btn-label');
+          if (label) label.textContent = btn.dataset.busyLabel || 'Importando...';
+        });
+        confirmNote.classList.add('is-visible');
       });
-    });
-    form.addEventListener('submit', function (event) {
-      const clickedButton = actions.querySelector('button[data-clicked="1"]') || document.activeElement;
-      if (!setBusy(clickedButton)) event.preventDefault();
-    });
+    }
   })();
 </script>
 {% endblock %}

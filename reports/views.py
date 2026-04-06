@@ -5,6 +5,9 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
 
+import os
+import tempfile
+import uuid
 import openpyxl
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -426,7 +429,7 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             form.fields.pop('participant', None)
         return form
 
-    def _render(self, request, form, preview=None, errors=None, summary=None, selected_job=None):
+    def _render(self, request, form, preview=None, errors=None, summary=None, selected_job=None, validated_token=None, validated_filename=None):
         jobs = list(_get_import_jobs_queryset(request)[:15])
         if not selected_job and jobs:
             requested_job_id = request.GET.get('job')
@@ -441,6 +444,8 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             'selected_job_error_url': reverse('report_import_errors_download', kwargs={'job_id': selected_job.pk}) if selected_job and selected_job.error_messages else '',
             'is_job_running': bool(selected_job and selected_job.status in [ImportJob.STATUS_PENDING, ImportJob.STATUS_PROCESSING]),
             'import_mode': getattr(settings, 'IMPORT_MODE', 'sync'),
+            'validated_token': validated_token,
+            'validated_filename': validated_filename,
         })
 
     def get(self, request, *args, **kwargs):
@@ -448,7 +453,77 @@ class ImportWorkbookView(LoginRequiredMixin, View):
         selected_job = _get_visible_import_job(request, request.GET.get('job'))
         return self._render(request, form, selected_job=selected_job)
 
+    def _save_temp_file(self, request, uploaded_file):
+        """Salva o arquivo em temp e guarda o caminho na sessão. Retorna o token."""
+        token = str(uuid.uuid4())
+        uploaded_file.seek(0)
+        content = uploaded_file.read()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', prefix=f'import_{token}_')
+        tmp.write(content)
+        tmp.close()
+        session_key = f'import_tmp_{token}'
+        request.session[session_key] = {
+            'path': tmp.name,
+            'filename': getattr(uploaded_file, 'name', 'planilha.xlsx'),
+            'participant_id': None,  # preenchido pelo chamador
+        }
+        return token
+
+    def _load_temp_file(self, request, token):
+        """Recupera o arquivo temporário da sessão. Retorna (bytes, filename) ou (None, None)."""
+        session_key = f'import_tmp_{token}'
+        data = request.session.get(session_key)
+        if not data:
+            return None, None
+        path = data.get('path')
+        filename = data.get('filename', 'planilha.xlsx')
+        if not path or not os.path.exists(path):
+            return None, None
+        with open(path, 'rb') as f:
+            content = f.read()
+        return content, filename
+
+    def _cleanup_temp_file(self, request, token):
+        """Remove arquivo temp e limpa a sessão."""
+        session_key = f'import_tmp_{token}'
+        data = request.session.pop(session_key, None)
+        if data and data.get('path'):
+            try:
+                os.unlink(data['path'])
+            except OSError:
+                pass
+
     def post(self, request, *args, **kwargs):
+        action = request.POST.get('action') or 'validate'
+
+        # ── Confirmação sem re-upload ─────────────────────────────
+        if action == 'confirm':
+            token = request.POST.get('validated_token', '')
+            participant_id = request.POST.get('participant_id')
+            file_bytes, filename = self._load_temp_file(request, token)
+            if not file_bytes:
+                messages.error(request, 'Sessão expirada. Por favor, valide a planilha novamente.')
+                form = self._build_form(request)
+                return self._render(request, form)
+
+            from participants.models import Participant as _Participant
+            participant = _Participant.objects.filter(pk=participant_id).first() if participant_id else getattr(request.user, 'participant', None)
+            if not participant:
+                messages.error(request, 'Participante não encontrado.')
+                form = self._build_form(request)
+                return self._render(request, form)
+
+            from io import BytesIO as _BytesIO
+            import django.core.files.uploadedfile as _uf
+            tmp_file = _uf.InMemoryUploadedFile(
+                _BytesIO(file_bytes), 'workbook', filename,
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                len(file_bytes), None
+            )
+            self._cleanup_temp_file(request, token)
+            return self._do_import(request, participant, tmp_file, filename)
+
+        # ── Upload normal ─────────────────────────────────────────
         form = self._build_form(request, request.POST, request.FILES)
         if not form.is_valid():
             return self._render(request, form)
@@ -458,29 +533,40 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             messages.error(request, 'Selecione um participante.')
             return self._render(request, form)
 
-        action = request.POST.get('action') or 'validate'
         uploaded_file = form.cleaned_data['workbook']
         workbook = openpyxl.load_workbook(uploaded_file)
         summary, errors, preview = build_import_preview(workbook, participant, request.user, persist=False)
 
         if action == 'validate' or errors:
+            validated_token = None
+            validated_filename = None
+            if not errors:
+                # Salva arquivo em temp para evitar re-upload na confirmação
+                validated_token = self._save_temp_file(request, uploaded_file)
+                validated_filename = getattr(uploaded_file, 'name', 'planilha.xlsx')
+                request.session[f'import_tmp_{validated_token}']['participant_id'] = participant.pk
+                request.session.modified = True
             if errors:
                 messages.warning(request, f'Validação concluída com {len(errors)} inconsistências. Corrija a planilha antes de importar.')
             else:
-                messages.success(request, 'Validação concluída sem inconsistências. A planilha está pronta para importação.')
-            return self._render(request, form, preview=preview, errors=errors, summary=summary)
+                messages.success(request, 'Validação concluída sem inconsistências. Confirme para importar.')
+            return self._render(request, form, preview=preview, errors=errors, summary=summary,
+                                validated_token=validated_token, validated_filename=validated_filename)
 
+        return self._do_import(request, participant, uploaded_file, getattr(uploaded_file, 'name', 'planilha.xlsx'))
+
+    def _do_import(self, request, participant, uploaded_file, filename):
+        """Executa a importação real (sync ou async)."""
         import_mode = getattr(settings, 'IMPORT_MODE', 'sync')
 
         if import_mode == 'sync':
             uploaded_file.seek(0)
             workbook = openpyxl.load_workbook(uploaded_file)
             summary, errors, preview = build_import_preview(workbook, participant, request.user, persist=True)
-
             if errors:
-                messages.error(request, 'A importação encontrou inconsistências e não foi concluída por completo. Revise a planilha.')
+                messages.error(request, 'A importação encontrou inconsistências e não foi concluída. Revise a planilha.')
+                form = self._build_form(request)
                 return self._render(request, form, preview=preview, errors=errors, summary=summary)
-
             messages.success(
                 request,
                 f"Importação concluída. Entradas: {summary.get('entries', 0)}, saídas: {summary.get('sales', 0)}, transformações: {summary.get('transformations', 0)}."
@@ -488,12 +574,15 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             return redirect('dashboard')
 
         uploaded_file.seek(0)
+        workbook = openpyxl.load_workbook(uploaded_file)
+        summary, errors, preview = build_import_preview(workbook, participant, request.user, persist=False)
         total_rows = count_workbook_rows(workbook)
+        uploaded_file.seek(0)
         job = ImportJob.objects.create(
             participant=participant,
             created_by=request.user,
             workbook=uploaded_file,
-            original_filename=getattr(uploaded_file, 'name', ''),
+            original_filename=filename,
             status=ImportJob.STATUS_PENDING,
             summary=_serialize_json_safe(summary),
             preview=_serialize_json_safe(preview),
@@ -501,6 +590,6 @@ class ImportWorkbookView(LoginRequiredMixin, View):
             progress_current=0,
             progress_total=total_rows,
         )
-        messages.success(request, f'Importação enviada para a fila com sucesso. Job #{job.pk} criado para {job.original_filename or "planilha"}.')
+        messages.success(request, f'Importação enviada para a fila com sucesso. Job #{job.pk} criado para {filename or "planilha"}.')
         return redirect(f"{reverse('report_import_workbook')}?job={job.pk}")
 
