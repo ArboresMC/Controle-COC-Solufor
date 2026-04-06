@@ -57,6 +57,38 @@
   <div class="card metric-card"><div class="metric-label">Pendências</div><div class="metric-value">{{ needs_correction }}</div><div class="metric-foot">Registros aguardando correção ou revisão</div></div>
 </div>
 
+<div class="card" style="margin-bottom: 0;">
+  <div class="card-header" style="margin-bottom: 14px;">
+    <div>
+      <div class="kicker">Histórico geral</div>
+      <h2 class="card-title">Volumes totais desde o início</h2>
+      <p class="card-subtitle">Acumulado de todas as movimentações registradas, independente do período.</p>
+    </div>
+  </div>
+  <div class="grid metrics">
+    <div class="card metric-card" style="background: var(--panel-soft);">
+      <div class="metric-label">Total de entradas</div>
+      <div class="metric-value">{{ hist_entries_count }}</div>
+      <div class="metric-foot">Volume acumulado: {{ hist_entries_total }}</div>
+    </div>
+    <div class="card metric-card" style="background: var(--panel-soft);">
+      <div class="metric-label">Total de saídas</div>
+      <div class="metric-value">{{ hist_sales_count }}</div>
+      <div class="metric-foot">Volume acumulado: {{ hist_sales_total }}</div>
+    </div>
+    <div class="card metric-card" style="background: var(--panel-soft);">
+      <div class="metric-label">Total de transformações</div>
+      <div class="metric-value">{{ hist_transformations_count }}</div>
+      <div class="metric-foot">Produção acumulada: {{ hist_transformations_total }}</div>
+    </div>
+    <div class="card metric-card" style="background: var(--panel-soft);">
+      <div class="metric-label">Movimentações totais</div>
+      <div class="metric-value">{{ hist_entries_count|add:hist_sales_count|add:hist_transformations_count }}</div>
+      <div class="metric-foot">Entradas + saídas + transformações</div>
+    </div>
+  </div>
+</div>
+
 <div class="dashboard-grid-2">
   <div class="card">
     <div class="card-header">
@@ -98,7 +130,7 @@
       <a class="btn" href="/transactions/transformations/new/">Nova transformação</a>
       {% endif %}
       <a class="btn secondary" href="/reports/import/">Importar planilha</a>
-      {% if not user.is_participant_user %}<a class="btn secondary" href="/reports/traceability/">Rastreabilidade</a>{% endif %}
+      <a class="btn secondary" href="/reports/traceability/">Rastreabilidade</a>
       <a class="btn secondary" href="/transactions/documents/">Documentos</a>
       <a class="btn secondary" href="/compliance/">Fechamentos</a>
     </div>

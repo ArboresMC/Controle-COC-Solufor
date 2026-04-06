@@ -142,6 +142,37 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             'top_products': _build_top_products(month_entries, month_sales),
         }
 
+        # Totais históricos — desde o início, sem filtro de mês
+        all_entries = EntryRecord.objects.select_related('participant', 'product')
+        all_sales = SaleRecord.objects.select_related('participant', 'product')
+        all_transformations = TransformationRecord.objects.select_related('participant')
+        if user.is_manager or user.is_auditor:
+            if current_org:
+                all_entries = all_entries.filter(participant__organization=current_org)
+                all_sales = all_sales.filter(participant__organization=current_org)
+                all_transformations = all_transformations.filter(participant__organization=current_org)
+            else:
+                all_entries = EntryRecord.objects.none()
+                all_sales = SaleRecord.objects.none()
+                all_transformations = TransformationRecord.objects.none()
+        elif getattr(user, 'participant', None):
+            all_entries = all_entries.filter(participant=user.participant)
+            all_sales = all_sales.filter(participant=user.participant)
+            all_transformations = all_transformations.filter(participant=user.participant)
+        else:
+            all_entries = EntryRecord.objects.none()
+            all_sales = SaleRecord.objects.none()
+            all_transformations = TransformationRecord.objects.none()
+
+        data.update({
+            'hist_entries_count': all_entries.count(),
+            'hist_sales_count': all_sales.count(),
+            'hist_transformations_count': all_transformations.count(),
+            'hist_entries_total': all_entries.aggregate(total=Sum('quantity_base'))['total'] or 0,
+            'hist_sales_total': all_sales.aggregate(total=Sum('quantity_base'))['total'] or 0,
+            'hist_transformations_total': all_transformations.aggregate(total=Sum('target_quantity_base'))['total'] or 0,
+        })
+
         if user.is_manager:
             active_participants = Participant.objects.filter(status='active')
             active_participants = active_participants.filter(organization=current_org) if current_org else Participant.objects.none()
