@@ -41,8 +41,21 @@ def normalize_header(value):
 
 
 def sheet_rows(sheet):
-    headers = [normalize_header(cell) for cell in next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), [])]
-    for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+    # Detecta a linha de header buscando a primeira que contenha 'data'.
+    # Isso permite que abas com linha de instrução na linha 1 (Saidas,
+    # Transformacoes) funcionem corretamente — o header real fica na linha 2.
+    headers = []
+    header_row = 1
+    for candidate in (1, 2):
+        row_values = list(next(sheet.iter_rows(min_row=candidate, max_row=candidate, values_only=True), []))
+        normalized = [normalize_header(cell) for cell in row_values]
+        if 'data' in normalized:
+            headers = normalized
+            header_row = candidate
+            break
+
+    data_start = header_row + 1
+    for idx, row in enumerate(sheet.iter_rows(min_row=data_start, values_only=True), start=data_start):
         values = list(row)
         if not any(value not in (None, '') for value in values):
             continue
