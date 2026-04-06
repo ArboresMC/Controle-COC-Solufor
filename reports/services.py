@@ -316,11 +316,19 @@ def build_import_preview(workbook, participant, user, persist=False):
                 produto_e_informativo = not produto_nome_limpo or u'\u2190' in produto_nome_limpo
 
                 if produto_e_informativo and documento_origem:
-                    lot_ref = _resolve_preferred_lot(participant, documento_origem)
-                    if lot_ref:
-                        product = lot_ref.product
+                    if persist:
+                        # Gravação real: lotes da fase 1 já existem, busca obrigatória.
+                        lot_ref = _resolve_preferred_lot(participant, documento_origem)
+                        if lot_ref:
+                            product = lot_ref.product
+                        else:
+                            raise ValueError(f'documento_origem "{documento_origem}" não encontrado. Verifique se o número do documento da entrada foi digitado corretamente.')
                     else:
-                        raise ValueError(f'documento_origem "{documento_origem}" não encontrado. Verifique se a entrada foi importada.')
+                        # Preview: entradas ainda não gravadas, aceita documento_origem sem verificar no banco.
+                        # Usa qualquer produto existente só para continuar a validação dos demais campos.
+                        product = Product.objects.first()
+                        if not product:
+                            raise ValueError('Nenhum produto cadastrado. Cadastre produtos antes de importar.')
                 elif produto_e_informativo:
                     raise ValueError('Informe o produto ou o documento_origem para identificar o lote de origem.')
                 else:
