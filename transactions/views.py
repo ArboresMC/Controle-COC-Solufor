@@ -179,6 +179,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             closings_qs = MonthlyClosing.objects.filter(year=today.year, month=today.month)
             closings_qs = closings_qs.filter(participant__organization=current_org) if current_org else MonthlyClosing.objects.none()
 
+            # Conta total de registros submitted aguardando aprovação
+            pending_entries = EntryRecord.objects.filter(
+                participant__organization=current_org, status='submitted'
+            ).count() if current_org else 0
+            pending_sales = SaleRecord.objects.filter(
+                participant__organization=current_org, status='submitted'
+            ).count() if current_org else 0
+            data['pending_submissions_count'] = pending_entries + pending_sales
+
             participant_summaries = []
             for participant in active_participants.order_by('trade_name', 'legal_name')[:8]:
                 summary = get_participant_balance_summary(participant)
@@ -415,3 +424,68 @@ class ManagerReviewSaleListView(ManagerRequiredMixin, ListView):
     def get_queryset(self):
         org = getattr(self.request.user, 'current_organization', None)
         return SaleRecord.objects.select_related('participant', 'product').filter(participant__organization=org) if org else SaleRecord.objects.none()
+
+
+class ManagerReviewDashboardView(ManagerRequiredMixin, TemplateView):
+    """Lista participantes com registros pendentes de aprovação (submitted)."""
+    template_name = 'transactions/review_list.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        org = getattr(self.request.user, 'current_organization', None)
+        if not org:
+            ctx['pending_participants'] = []
+            return ctx
+
+        from django.db.models import Count, Q
+        participants = Participant.objects.filter(
+            organization=org, status='active'
+        ).annotate(
+            pending_entries=Count('entries', filter=Q(entries__status='submitted')),
+            pending_sales=Count('sales', filter=Q(sales__status='submitted')),
+        ).filter(
+            Q(pending_entries__gt=0) | Q(pending_sales__gt=0)
+        ).order_by('legal_name')
+
+        ctx['pending_participants'] = participants
+        return ctx
+
+
+class BulkApproveView(ManagerRequiredMixin, View):
+    """Aprova em lote todos os registros submitted de um participante."""
+
+    def post(self, request, *args, **kwargs):
+        from django.db.models import Q
+        participant_id = request.POST.get('participant_id')
+        org = getattr(request.user, 'current_organization', None)
+        if not org or not participant_id:
+            messages.error(request, 'Requisição inválida.')
+            return redirect('manager_review_dashboard')
+
+        participant = Participant.objects.filter(pk=participant_id, organization=org).first()
+        if not participant:
+            messages.error(request, 'Participante não encontrado.')
+            return redirect('manager_review_dashboard')
+
+        entries_updated = EntryRecord.objects.filter(
+            participant=participant, status='submitted'
+        ).update(status='reviewed')
+
+        sales_updated = SaleRecord.objects.filter(
+            participant=participant, status='submitted'
+        ).update(status='reviewed')
+
+        # Invalida cache do dashboard do participante
+        from django.core.cache import cache
+        from datetime import date
+        today = date.today()
+        cache_key = f"dashboard:v2:user:*:org:{org.id}:participant:{participant.id}:month:{today:%Y-%m}"
+        cache.clear()
+
+        total = entries_updated + sales_updated
+        messages.success(
+            request,
+            f'{total} registro(s) de {participant} aprovado(s). '
+            f'({entries_updated} entradas, {sales_updated} saídas)'
+        )
+        return redirect('manager_review_dashboard')

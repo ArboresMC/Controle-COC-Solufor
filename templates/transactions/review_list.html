@@ -1,24 +1,67 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  .pending-card {
+    border: 1px solid rgba(15,23,42,.08);
+    border-radius: 16px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: #fff;
+  }
+  .pending-card + .pending-card { margin-top: 10px; }
+  .pending-card .name { font-weight: 700; font-size: 15px; }
+  .pending-card .counts { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .pending-card .badge-count {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #fff7ed; color: #9a3412;
+    border-radius: 999px; padding: 4px 12px;
+    font-weight: 700; font-size: 12px;
+  }
+  .approve-form { display: inline; }
+</style>
+
 <div class="card">
   <div class="card-header">
-    <div><div class="kicker">Gestão</div><h2 class="card-title">Fila de revisão</h2><p class="card-subtitle">Conferência de registros enviados pelos participantes.</p></div>
+    <div>
+      <div class="kicker">Gestão</div>
+      <h2 class="card-title">Aprovação de lançamentos</h2>
+      <p class="card-subtitle">Participantes com registros aguardando aprovação do gestor.</p>
+    </div>
   </div>
-  {% if records %}
-  <div class="table-wrap"><table>
-    <tr><th>Participante</th><th>Data</th><th>Documento</th><th>Produto</th><th>Quantidade</th><th>Status</th><th>Ação</th></tr>
-    {% for r in records %}
-    <tr>
-      <td>{{ r.participant }}</td>
-      <td>{{ r.movement_date|date:"d/m/Y" }}</td>
-      <td>{{ r.document_number }}</td>
-      <td>{{ r.product }}</td>
-      <td>{{ r.quantity_base }} {{ r.get_unit_snapshot_display }}</td>
-      <td><span class="badge {% if r.status == 'reviewed' %}success{% elif r.status == 'needs_correction' %}warning{% else %}neutral{% endif %}">{{ r.get_status_display }}</span></td>
-      <td><a class="inline-link" href="/admin/{{ r._meta.app_label }}/{{ r._meta.model_name }}/{{ r.id }}/change/">Abrir no admin</a></td>
-    </tr>
+
+  {% if pending_participants %}
+    {% for p in pending_participants %}
+    <div class="pending-card">
+      <div>
+        <div class="name">{{ p }}</div>
+        <div class="counts">
+          {% if p.pending_entries %}{{ p.pending_entries }} entrada(s){% endif %}
+          {% if p.pending_entries and p.pending_sales %} · {% endif %}
+          {% if p.pending_sales %}{{ p.pending_sales }} saída(s){% endif %}
+          aguardando aprovação
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="badge-count">
+          {{ p.pending_entries|add:p.pending_sales }} pendente(s)
+        </span>
+        <form class="approve-form" method="post" action="{% url 'bulk_approve' %}">
+          {% csrf_token %}
+          <input type="hidden" name="participant_id" value="{{ p.id }}">
+          <button class="btn" type="submit"
+            onclick="return confirm('Aprovar todos os lançamentos de {{ p }}?')">
+            ✓ Aprovar tudo
+          </button>
+        </form>
+      </div>
+    </div>
     {% endfor %}
-  </table></div>
-  {% else %}<div class="empty-state">Nenhum registro para revisão no momento.</div>{% endif %}
+  {% else %}
+    <div class="empty-state">Nenhum lançamento pendente de aprovação no momento.</div>
+  {% endif %}
 </div>
 {% endblock %}

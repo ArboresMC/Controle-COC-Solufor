@@ -130,7 +130,7 @@
       <a class="btn" href="/transactions/transformations/new/">Nova transformação</a>
       {% endif %}
       <a class="btn secondary" href="/reports/import/">Importar planilha</a>
-      {% if user.is_manager or user.is_auditor %}<a class="btn secondary" href="/reports/traceability/">Rastreabilidade</a>{% endif %}
+      <a class="btn secondary" href="/reports/traceability/">Rastreabilidade</a>
       <a class="btn secondary" href="/transactions/documents/">Documentos</a>
       <a class="btn secondary" href="/compliance/">Fechamentos</a>
     </div>
@@ -162,6 +162,21 @@
   </div>
 
   {% if user.is_manager %}
+  <div class="card" style="border-color: {% if pending_submissions_count %}#f59e0b{% else %}rgba(15,23,42,.08){% endif %}">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Aprovações</div>
+        <h2 class="card-title">Lançamentos aguardando aprovação</h2>
+        <p class="card-subtitle">Registros importados pelos participantes que precisam de OK do gestor.</p>
+      </div>
+      <a class="btn {% if not pending_submissions_count %}secondary{% endif %}" href="{% url 'manager_review_dashboard' %}">
+        {% if pending_submissions_count %}Ver e aprovar ({{ pending_submissions_count }}){% else %}Ver aprovações{% endif %}
+      </a>
+    </div>
+    {% if not pending_submissions_count %}
+    <div class="empty-state" style="padding:12px 0;">Nenhum lançamento pendente de aprovação.</div>
+    {% endif %}
+  </div>
   <div class="card soft">
     <div class="card-header">
       <div>
