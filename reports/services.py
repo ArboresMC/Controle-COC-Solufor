@@ -302,19 +302,33 @@ def build_import_preview(workbook, participant, user, persist=False):
                 declaracao = first_present(row, 'declaracao_fsc')
                 lote = first_present(row, 'lote')
                 observacoes = first_present(row, 'observacoes')
+                documento_origem = safe_str(first_present(row, 'documento_origem'))
 
-                product = _coerce_product(produto_nome)
+                # Se produto vier com texto informativo do modelo (ex: "← sistema identifica"),
+                # ignora e deriva o produto a partir do documento_origem.
+                produto_nome_limpo = safe_str(produto_nome)
+                produto_e_informativo = not produto_nome_limpo or u'\u2190' in produto_nome_limpo
+
+                if produto_e_informativo and documento_origem:
+                    lot_ref = _resolve_preferred_lot(participant, documento_origem)
+                    if lot_ref:
+                        product = lot_ref.product
+                    else:
+                        raise ValueError(f'documento_origem "{documento_origem}" não encontrado. Verifique se a entrada foi importada.')
+                elif produto_e_informativo:
+                    raise ValueError('Informe o produto ou o documento_origem para identificar o lote de origem.')
+                else:
+                    product = _coerce_product(produto_nome_limpo)
+
                 customer_name = safe_str(cliente_nome)
                 if not customer_name:
                     raise ValueError('Cliente não informado.')
-                # CORREÇÃO: só cria cliente durante a gravação real (persist=True).
                 customer = _get_or_create_counterparty(participant, customer_name, type_='customer', create_if_missing=persist)
                 quantidade = decimal_value(quantidade)
                 unidade = safe_str(unidade) or product.unit
                 quantity_base = convert_to_base(product, quantidade, unidade)
 
-                # Resolve lote preferencial via documento_origem (novo) ou id_lote_origem (legado).
-                documento_origem = safe_str(first_present(row, 'documento_origem'))
+                # Resolve lote preferencial via documento_origem ou id_lote_origem (legado).
                 preferred_lot = _resolve_preferred_lot(participant, documento_origem, product=product) if persist else None
                 if not preferred_lot and persist:
                     lot_id = safe_str(first_present(row, 'id_lote_origem'))
