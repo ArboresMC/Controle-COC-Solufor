@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block hero_title %}{{ closing.participant.name }} — {{ closing.period_display }}{% endblock %}
+{% block hero_text %}Revise os lançamentos do período antes de aprovar ou rejeitar o fechamento.{% endblock %}
+{% block content %}
+
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div style="display:flex; align-items:center; gap:12px;">
+    <a href="{% url 'manager_closing_dashboard' %}" class="btn" style="background:var(--panel-soft); color:var(--text); box-shadow:none;">
+      ← Voltar
+    </a>
+    <span class="badge badge-{{ closing.status }}">{{ closing.get_status_display }}</span>
+  </div>
+  {% if closing.status == 'submitted' %}
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <form method="post" action="{% url 'approve_closing' closing.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:var(--success);"
+          onclick="return confirm('Aprovar este fechamento?')">✓ Aprovar</button>
+      </form>
+      <button class="btn" style="background:var(--danger);" onclick="toggleReject('reject-form')">
+        ✗ Rejeitar
+      </button>
+    </div>
+  {% endif %}
+</div>
+
+{% if messages %}
+  {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }}">{{ msg }}</div>
+  {% endfor %}
+{% endif %}
+
+<!-- Formulário de rejeição (oculto) -->
+{% if closing.status == 'submitted' %}
+  <div id="reject-form" class="card" style="display:none; border-left:4px solid var(--danger); margin-bottom:20px;">
+    <div class="card-header">
+      <div>
+        <h3>Rejeitar fechamento</h3>
+        <p class="card-subtitle">O participante verá este motivo no dashboard e na página de fechamentos.</p>
+      </div>
+    </div>
+    <form method="post" action="{% url 'reject_closing' closing.pk %}">
+      {% csrf_token %}
+      <textarea name="rejection_reason" rows="4" style="width:100%; margin-bottom:12px;"
+        placeholder="Descreva o que precisa ser corrigido pelo participante…" required></textarea>
+      <div style="display:flex; gap:8px;">
+        <button type="submit" class="btn" style="background:var(--danger);">Confirmar rejeição</button>
+        <button type="button" class="btn" style="background:var(--panel-soft); color:var(--text); box-shadow:none;"
+          onclick="toggleReject('reject-form')">Cancelar</button>
+      </div>
+    </form>
+  </div>
+{% endif %}
+
+<!-- Entradas -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Lançamentos</div>
+      <h2 class="card-title">Entradas <span class="badge neutral">{{ entries|length }}</span></h2>
+    </div>
+  </div>
+  {% if entries %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Data</th><th>Documento</th><th>Fornecedor</th>
+          <th>Produto</th><th>Quantidade</th><th>Un</th><th>FSC</th>
+        </tr>
+        {% for e in entries %}
+          <tr>
+            <td>{{ e.movement_date|date:"d/m/Y" }}</td>
+            <td>{{ e.document_number }}</td>
+            <td>{{ e.supplier }}</td>
+            <td><strong>{{ e.product }}</strong></td>
+            <td>{{ e.quantity }}</td>
+            <td>{{ e.movement_unit }}</td>
+            <td>{{ e.fsc_claim }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">Nenhuma entrada neste período.</div>
+  {% endif %}
+</div>
+
+<!-- Saídas -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Saídas <span class="badge neutral">{{ sales|length }}</span></h2>
+    </div>
+  </div>
+  {% if sales %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Data</th><th>Documento</th><th>Cliente</th>
+          <th>Produto</th><th>Quantidade</th><th>Un</th><th>FSC</th>
+        </tr>
+        {% for s in sales %}
+          <tr>
+            <td>{{ s.movement_date|date:"d/m/Y" }}</td>
+            <td>{{ s.document_number }}</td>
+            <td>{{ s.customer }}</td>
+            <td><strong>{{ s.product }}</strong></td>
+            <td>{{ s.quantity }}</td>
+            <td>{{ s.movement_unit }}</td>
+            <td>{{ s.fsc_claim }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">Nenhuma saída neste período.</div>
+  {% endif %}
+</div>
+
+<!-- Transformações -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Transformações <span class="badge neutral">{{ transformations|length }}</span></h2>
+    </div>
+  </div>
+  {% if transformations %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Data</th><th>Documento</th><th>Origem</th>
+          <th>Destino</th><th>Qtd produzida</th><th>Un</th>
+        </tr>
+        {% for t in transformations %}
+          <tr>
+            <td>{{ t.movement_date|date:"d/m/Y" }}</td>
+            <td>{{ t.document_number }}</td>
+            <td><strong>{{ t.source_product }}</strong></td>
+            <td><strong>{{ t.target_product }}</strong></td>
+            <td>{{ t.target_quantity_base }}</td>
+            <td>{{ t.target_unit_snapshot }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">Nenhuma transformação neste período.</div>
+  {% endif %}
+</div>
+
+<script>
+function toggleReject(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display === 'block') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+{% endblock %}

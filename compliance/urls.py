@@ -1,10 +1,15 @@
 from django.urls import path
-from .views import ClosingListView, SubmitCurrentClosingView, ManagerClosingListView, ManagerClosingApproveView, ManagerClosingRejectView
+from . import views
 
 urlpatterns = [
-    path('', ClosingListView.as_view(), name='closing_list'),
-    path('submit-current/', SubmitCurrentClosingView.as_view(), name='submit_current_closing'),
-    path('manager/', ManagerClosingListView.as_view(), name='manager_closing_list'),
-    path('manager/<int:pk>/approve/', ManagerClosingApproveView.as_view(), name='manager_closing_approve'),
-    path('manager/<int:pk>/reject/', ManagerClosingRejectView.as_view(), name='manager_closing_reject'),
+    # Participante
+    path('fechamentos/', views.MyClosingsView.as_view(), name='my_closings'),
+    path('fechamentos/criar/', views.CreateClosingView.as_view(), name='create_closing'),
+    path('fechamentos/<int:pk>/enviar/', views.SubmitClosingView.as_view(), name='submit_closing'),
+
+    # Gestor
+    path('gestor/fechamentos/', views.ManagerClosingDashboardView.as_view(), name='manager_closing_dashboard'),
+    path('gestor/fechamentos/<int:pk>/', views.ClosingDetailView.as_view(), name='closing_detail'),
+    path('gestor/fechamentos/<int:pk>/aprovar/', views.ApproveClosingView.as_view(), name='approve_closing'),
+    path('gestor/fechamentos/<int:pk>/rejeitar/', views.RejectClosingView.as_view(), name='reject_closing'),
 ]

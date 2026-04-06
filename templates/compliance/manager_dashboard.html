@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block hero_title %}Aprovação de Fechamentos{% endblock %}
+{% block hero_text %}Revise e aprove os fechamentos mensais enviados pelos participantes. Em caso de erro, rejeite com uma justificativa para que o participante corrija.{% endblock %}
+{% block content %}
+
+{% if messages %}
+  {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }}">{{ msg }}</div>
+  {% endfor %}
+{% endif %}
+
+<!-- Pendentes de aprovação -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Pendentes</div>
+      <h2 class="card-title">
+        Aguardando aprovação
+        {% if submitted_closings %}
+          <span class="badge warning" style="margin-left:8px;">{{ submitted_closings|length }}</span>
+        {% endif %}
+      </h2>
+      <p class="card-subtitle">Fechamentos enviados pelos participantes que aguardam seu OK.</p>
+    </div>
+  </div>
+
+  {% if submitted_closings %}
+    {% for closing in submitted_closings %}
+      <div class="closing-card closing-submitted" style="margin-top:14px;">
+        <div class="closing-header">
+          <div>
+            <h3>{{ closing.participant.name }}</h3>
+            <span class="muted">{{ closing.period_display }}</span>
+            <br>
+            <small class="muted">Enviado em {{ closing.submitted_at|date:"d/m/Y H:i" }}</small>
+          </div>
+          <div class="closing-actions" style="flex-wrap:wrap; gap:8px;">
+            <a href="{% url 'closing_detail' closing.pk %}" class="btn" style="background:var(--primary-soft); color:var(--primary); box-shadow:none;">
+              Ver lançamentos
+            </a>
+
+            <!-- Aprovar -->
+            <form method="post" action="{% url 'approve_closing' closing.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn" style="background:var(--success);"
+                onclick="return confirm('Aprovar o fechamento de {{ closing.period_display }} de {{ closing.participant.name }}?')">
+                ✓ Aprovar
+              </button>
+            </form>
+
+            <!-- Rejeitar -->
+            <button class="btn" style="background:var(--danger);"
+              onclick="toggleReject('reject-{{ closing.pk }}')">
+              ✗ Rejeitar
+            </button>
+          </div>
+        </div>
+
+        <!-- Formulário de rejeição (oculto por padrão) -->
+        <div id="reject-{{ closing.pk }}" class="reject-form" style="display:none;">
+          <form method="post" action="{% url 'reject_closing' closing.pk %}">
+            {% csrf_token %}
+            <label style="font-weight:600; display:block; margin-bottom:6px;">
+              Motivo da rejeição (será exibido ao participante):
+            </label>
+            <textarea name="rejection_reason" rows="3" style="width:100%; margin-bottom:10px;"
+              placeholder="Descreva o que precisa ser corrigido…" required></textarea>
+            <div style="display:flex; gap:8px;">
+              <button type="submit" class="btn" style="background:var(--danger);">Confirmar rejeição</button>
+              <button type="button" class="btn" style="background:var(--panel-soft); color:var(--text); box-shadow:none;"
+                onclick="toggleReject('reject-{{ closing.pk }}')">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state" style="padding:16px 0;">Nenhum fechamento aguardando aprovação.</div>
+  {% endif %}
+</div>
+
+<!-- Histórico recente -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Histórico</div>
+      <h2 class="card-title">Últimas revisões</h2>
+      <p class="card-subtitle">Fechamentos aprovados ou rejeitados recentemente.</p>
+    </div>
+  </div>
+  {% if recent_closings %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Participante</th>
+          <th>Período</th>
+          <th>Status</th>
+          <th>Revisado por</th>
+          <th>Data</th>
+          <th></th>
+        </tr>
+        {% for closing in recent_closings %}
+          <tr>
+            <td><strong>{{ closing.participant.name }}</strong></td>
+            <td>{{ closing.period_display }}</td>
+            <td>
+              <span class="badge badge-{{ closing.status }}">{{ closing.get_status_display }}</span>
+            </td>
+            <td>{{ closing.reviewed_by.get_full_name|default:closing.reviewed_by.username|default:"—" }}</td>
+            <td>{{ closing.reviewed_at|date:"d/m/Y" }}</td>
+            <td><a class="inline-link" href="{% url 'closing_detail' closing.pk %}">Ver</a></td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">Nenhum fechamento revisado ainda.</div>
+  {% endif %}
+</div>
+
+<script>
+function toggleReject(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

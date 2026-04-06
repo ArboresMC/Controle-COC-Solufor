@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block hero_title %}Fechamentos Mensais{% endblock %}
+{% block hero_text %}Envie os lançamentos do mês para aprovação do gestor. Quando estiver tudo correto, clique em "Enviar para aprovação".{% endblock %}
+{% block content %}
+
+{% if messages %}
+  {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }}">{{ msg }}</div>
+  {% endfor %}
+{% endif %}
+
+<!-- Criar novo fechamento -->
+<div class="card" style="margin-bottom: 20px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Novo período</div>
+      <h2 class="card-title">Abrir fechamento</h2>
+      <p class="card-subtitle">Crie o fechamento do mês para depois enviá-lo ao gestor.</p>
+    </div>
+  </div>
+  <form method="post" action="{% url 'create_closing' %}" class="form-inline-row">
+    {% csrf_token %}
+    <select name="month" class="form-control" required>
+      {% for n, name in months %}
+        <option value="{{ n }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="year" value="{{ current_year }}" min="2020" max="2099"
+           style="width:100px" required>
+    <button type="submit" class="btn">Criar fechamento</button>
+  </form>
+</div>
+
+<!-- Lista de fechamentos -->
+{% if closings %}
+  {% for closing in closings %}
+    <div class="card closing-card closing-{{ closing.status }}" style="margin-bottom:14px;">
+      <div class="closing-header">
+        <div>
+          <h3>{{ closing.period_display }}</h3>
+          <span class="badge badge-{{ closing.status }}">{{ closing.get_status_display }}</span>
+          {% if closing.submitted_at %}
+            <span class="muted" style="font-size:13px; margin-left:8px;">
+              Enviado em {{ closing.submitted_at|date:"d/m/Y H:i" }}
+            </span>
+          {% endif %}
+        </div>
+        <div class="closing-actions">
+          {% if closing.status == 'open' or closing.status == 'rejected' %}
+            <form method="post" action="{% url 'submit_closing' closing.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn"
+                onclick="return confirm('Confirma o envio do fechamento de {{ closing.period_display }} para aprovação do gestor?')">
+                Enviar para aprovação
+              </button>
+            </form>
+          {% elif closing.status == 'submitted' %}
+            <span class="muted" style="font-size:14px;">⏳ Aguardando gestor…</span>
+          {% elif closing.status == 'approved' %}
+            <span style="color:var(--success); font-weight:700; font-size:14px;">
+              ✓ Aprovado em {{ closing.reviewed_at|date:"d/m/Y" }}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if closing.status == 'rejected' %}
+        <div class="rejection-notice" style="margin-top:12px;">
+          <strong>Motivo da rejeição:</strong>
+          <p>{{ closing.rejection_reason }}</p>
+          <small class="muted">
+            Rejeitado por {{ closing.reviewed_by.get_full_name|default:closing.reviewed_by.username }}
+            em {{ closing.reviewed_at|date:"d/m/Y H:i" }}
+          </small>
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="card">
+    <div class="empty-state">Nenhum fechamento criado ainda. Abra o primeiro período acima.</div>
+  </div>
+{% endif %}
+
+{% endblock %}

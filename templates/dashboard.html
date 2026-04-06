@@ -23,6 +23,14 @@
 .summary-pill span { color:var(--muted); font-size:13px; }
 .participant-chip-list { display:flex; flex-wrap:wrap; gap:10px; }
 .participant-chip { padding:9px 12px; border-radius:999px; background:#f3f8fb; border:1px solid var(--line); font-size:13px; }
+.closing-status-bar { display:flex; align-items:center; gap:12px; padding:14px 16px; border-radius:14px; border:1px solid var(--line); background:#f7fbfd; }
+.closing-status-bar.submitted { background:#fffbeb; border-color:#f59e0b; }
+.closing-status-bar.approved  { background:#f0fdf4; border-color:#22c55e; }
+.closing-status-bar.rejected  { background:#fef2f2; border-color:#ef4444; }
+.closing-status-bar .closing-label { flex:1; }
+.closing-status-bar .closing-label strong { display:block; font-size:14px; }
+.closing-status-bar .closing-label span { font-size:12px; color:var(--muted); }
+.rejection-box { margin-top:10px; padding:12px 14px; background:#fef2f2; border:1px solid #fca5a5; border-radius:12px; font-size:13px; }
 @media (max-width: 1100px) {
   .dashboard-grid-2, .dashboard-grid-3 { grid-template-columns: 1fr; }
 }
@@ -130,9 +138,11 @@
       <a class="btn" href="/transactions/transformations/new/">Nova transformação</a>
       {% endif %}
       <a class="btn secondary" href="/reports/import/">Importar planilha</a>
+      {% if user.is_manager or user.is_auditor %}
       <a class="btn secondary" href="/reports/traceability/">Rastreabilidade</a>
+      {% endif %}
       <a class="btn secondary" href="/transactions/documents/">Documentos</a>
-      <a class="btn secondary" href="/compliance/">Fechamentos</a>
+      <a class="btn secondary" href="{% url 'my_closings' %}">Fechamentos</a>
     </div>
   </div>
 </div>
@@ -162,19 +172,19 @@
   </div>
 
   {% if user.is_manager %}
-  <div class="card" style="border-color: {% if pending_submissions_count %}#f59e0b{% else %}rgba(15,23,42,.08){% endif %}">
+  <div class="card" style="border-color: {% if pending_closings_count %}#f59e0b{% else %}rgba(15,23,42,.08){% endif %}">
     <div class="card-header">
       <div>
         <div class="kicker">Aprovações</div>
-        <h2 class="card-title">Lançamentos aguardando aprovação</h2>
-        <p class="card-subtitle">Registros importados pelos participantes que precisam de OK do gestor.</p>
+        <h2 class="card-title">Fechamentos aguardando aprovação</h2>
+        <p class="card-subtitle">Fechamentos mensais enviados pelos participantes que aguardam revisão do gestor.</p>
       </div>
-      <a class="btn {% if not pending_submissions_count %}secondary{% endif %}" href="{% url 'manager_review_dashboard' %}">
-        {% if pending_submissions_count %}Ver e aprovar ({{ pending_submissions_count }}){% else %}Ver aprovações{% endif %}
+      <a class="btn {% if not pending_closings_count %}secondary{% endif %}" href="{% url 'manager_closing_dashboard' %}">
+        {% if pending_closings_count %}Ver e aprovar ({{ pending_closings_count }}){% else %}Ver fechamentos{% endif %}
       </a>
     </div>
-    {% if not pending_submissions_count %}
-    <div class="empty-state" style="padding:12px 0;">Nenhum lançamento pendente de aprovação.</div>
+    {% if not pending_closings_count %}
+    <div class="empty-state" style="padding:12px 0;">Nenhum fechamento pendente de aprovação.</div>
     {% endif %}
   </div>
   <div class="card soft">
@@ -199,12 +209,11 @@
       <div>
         <div class="kicker">Resumo de saldos</div>
         <h2 class="card-title">Saúde operacional</h2>
-        <p class="card-subtitle">Leitura rápida do que já está validado e do que exige atenção.</p>
+        <p class="card-subtitle">Leitura rápida dos saldos e itens que exigem atenção.</p>
       </div>
     </div>
     <div class="summary-list">
-      <div class="summary-pill"><strong>Saldos validados</strong><span>{{ balance_summary.validated_count }}</span></div>
-      <div class="summary-pill"><strong>Saldos projetados</strong><span>{{ balance_summary.projected_count }}</span></div>
+      <div class="summary-pill"><strong>Produtos com saldo</strong><span>{{ balance_summary.balance_count }}</span></div>
       <div class="summary-pill"><strong>Itens em atenção</strong><span>{{ balance_summary.low_count }}</span></div>
     </div>
   </div>
@@ -258,51 +267,72 @@
   {% endif %}
 </div>
 {% else %}
-<div class="dashboard-grid-2">
-  <div class="card">
-    <div class="card-header">
-      <div>
-        <h2 class="card-title">Saldos disponíveis</h2>
-        <p class="card-subtitle">Saldo validado pronto para uso e conferência.</p>
-      </div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Saldo atual</h2>
+      <p class="card-subtitle">Considera todos os lançamentos e transformações registrados.</p>
     </div>
-    {% if balance_items %}
-    <div class="table-wrap compact-table">
-      <table>
-        <tr><th>Produto</th><th>Situação</th></tr>
-        {% for item in balance_items %}
-        <tr>
-          <td><strong>{{ item.product }}</strong></td>
-          <td><span class="balance {{ item.status_class }}">{{ item.balance }} {{ item.unit }}</span></td>
-        </tr>
-        {% endfor %}
-      </table>
+  </div>
+  {% if balance_items %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Produto</th><th>Saldo</th></tr>
+      {% for item in balance_items %}
+      <tr>
+        <td><strong>{{ item.product }}</strong></td>
+        <td><span class="balance {{ item.status_class }}">{{ item.balance }} {{ item.unit }}</span></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-state">Nenhum lançamento registrado ainda.</div>
+  {% endif %}
+</div>
+
+<div class="card soft">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Fechamento mensal</div>
+      <h2 class="card-title">Competência atual</h2>
+      <p class="card-subtitle">Envie o fechamento do mês para aprovação do gestor quando os dados estiverem completos.</p>
     </div>
-    {% else %}
-      <div class="empty-state">Nenhum saldo validado ainda.</div>
-    {% endif %}
+    <a class="btn secondary" href="{% url 'my_closings' %}">Ver todos os fechamentos</a>
   </div>
 
-  <div class="card soft">
-    <div class="card-header">
-      <div>
-        <h2 class="card-title">Saldos projetados</h2>
-        <p class="card-subtitle">Considera todos os lançamentos e transformações registrados.</p>
+  {% if current_closing %}
+    <div class="closing-status-bar {{ current_closing.status }}">
+      <div class="closing-label">
+        <strong>{{ current_closing.period_display }}</strong>
+        <span>{{ current_closing.get_status_display }}</span>
       </div>
+      {% if current_closing.status == 'open' or current_closing.status == 'rejected' %}
+        <form method="post" action="{% url 'submit_closing' current_closing.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn"
+            onclick="return confirm('Confirmar envio do fechamento para aprovação?')">
+            Enviar para aprovação
+          </button>
+        </form>
+      {% elif current_closing.status == 'submitted' %}
+        <span class="badge warning">Aguardando gestor</span>
+      {% elif current_closing.status == 'approved' %}
+        <span class="badge success">✓ Aprovado</span>
+      {% endif %}
     </div>
-    {% if projected_balance_items %}
-      <div class="stack">
-      {% for item in projected_balance_items %}
-        <div class="info-box">
-          <strong>{{ item.product }}</strong><br>
-          <span class="balance {{ item.status_class }}" style="margin-top:8px;">{{ item.balance }} {{ item.unit }}</span>
-        </div>
-      {% endfor %}
-      </div>
-    {% else %}
-      <div class="empty-state">Nenhum saldo projetado encontrado.</div>
+    {% if current_closing.status == 'rejected' and current_closing.rejection_reason %}
+    <div class="rejection-box">
+      <strong>Motivo da rejeição:</strong> {{ current_closing.rejection_reason }}
+    </div>
     {% endif %}
-  </div>
+  {% else %}
+    <div class="empty-state" style="padding:12px 0;">
+      Nenhum fechamento aberto para este mês.
+      <a class="inline-link" href="{% url 'my_closings' %}">Criar fechamento</a>
+    </div>
+  {% endif %}
 </div>
 {% endif %}
 

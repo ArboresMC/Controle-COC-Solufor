@@ -1,52 +1,210 @@
-from datetime import date
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
-from django.views.generic import FormView, ListView
-from .forms import MonthlyClosingForm
+from django.views import View
+from django.views.generic import ListView, TemplateView
+
 from .models import MonthlyClosing
+from participants.models import Participant
+from transactions.models import EntryRecord, SaleRecord, TransformationRecord
 
-class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
-    def test_func(self):
-        return self.request.user.is_manager
 
-class ClosingListView(LoginRequiredMixin, ListView):
-    model = MonthlyClosing; template_name = 'compliance/closing_list.html'; context_object_name = 'closings'
+# ---------------------------------------------------------------------------
+# Mixin de permissão simples
+# ---------------------------------------------------------------------------
+
+class ManagerRequiredMixin(LoginRequiredMixin):
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.is_authenticated and
+                (request.user.is_manager or request.user.is_auditor or request.user.is_superuser)):
+            messages.error(request, 'Acesso restrito.')
+            return redirect('dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ParticipantRequiredMixin(LoginRequiredMixin):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        if not hasattr(request.user, 'participant') or request.user.participant is None:
+            messages.error(request, 'Seu usuário não está vinculado a um participante.')
+            return redirect('dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Participante: lista dos seus fechamentos
+# ---------------------------------------------------------------------------
+
+class MyClosingsView(ParticipantRequiredMixin, ListView):
+    template_name = 'compliance/my_closings.html'
+    context_object_name = 'closings'
+
     def get_queryset(self):
-        qs = MonthlyClosing.objects.select_related('participant', 'reviewed_by'); user = self.request.user; org = getattr(user, 'current_organization', None)
-        if user.is_manager or user.is_auditor: return qs.filter(participant__organization=org) if org else qs.none()
-        if user.participant: return qs.filter(participant=user.participant)
-        return qs.none()
+        return MonthlyClosing.objects.filter(
+            participant=self.request.user.participant
+        ).order_by('-year', '-month')
 
-class SubmitCurrentClosingView(LoginRequiredMixin, FormView):
-    template_name = 'compliance/submit_closing.html'; form_class = MonthlyClosingForm
-    def get_closing(self):
-        today = date.today()
-        return MonthlyClosing.objects.get_or_create(participant=self.request.user.participant, year=today.year, month=today.month, defaults={'status': 'open'})[0]
+
+# ---------------------------------------------------------------------------
+# Participante: enviar fechamento para aprovação
+# ---------------------------------------------------------------------------
+
+class SubmitClosingView(ParticipantRequiredMixin, View):
+    def post(self, request, pk):
+        closing = get_object_or_404(
+            MonthlyClosing,
+            pk=pk,
+            participant=request.user.participant,
+        )
+        if not closing.is_editable:
+            messages.error(request, 'Este fechamento não pode ser enviado no status atual.')
+            return redirect('my_closings')
+
+        closing.status = MonthlyClosing.STATUS_SUBMITTED
+        closing.submitted_at = timezone.now()
+        closing.rejection_reason = None  # limpa rejeição anterior se houver
+        closing.save()
+
+        messages.success(
+            request,
+            f'Fechamento de {closing.period_display} enviado para aprovação do gestor.'
+        )
+        return redirect('my_closings')
+
+
+# ---------------------------------------------------------------------------
+# Participante: criar fechamento para um período (se não existir)
+# ---------------------------------------------------------------------------
+
+class CreateClosingView(ParticipantRequiredMixin, View):
+    def post(self, request):
+        participant = request.user.participant
+        year = int(request.POST.get('year'))
+        month = int(request.POST.get('month'))
+
+        closing, created = MonthlyClosing.objects.get_or_create(
+            participant=participant,
+            year=year,
+            month=month,
+        )
+        if not created and closing.is_locked:
+            messages.warning(request, 'Este período já está aprovado e não pode ser reaberto.')
+        elif not created:
+            messages.info(request, f'Fechamento de {closing.period_display} já existe.')
+
+        return redirect('my_closings')
+
+
+# ---------------------------------------------------------------------------
+# Gestor: dashboard de pendências
+# ---------------------------------------------------------------------------
+
+class ManagerClosingDashboardView(ManagerRequiredMixin, TemplateView):
+    template_name = 'compliance/manager_dashboard.html'
+
     def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs); ctx['closing'] = self.get_closing(); return ctx
-    def form_valid(self, form):
-        closing = self.get_closing()
-        if closing.status == 'approved': messages.error(self.request, 'Este fechamento já foi aprovado e não pode ser reenviado.'); return redirect('closing_list')
-        closing.participant_notes = form.cleaned_data['participant_notes']; closing.declaration_no_movement = form.cleaned_data['declaration_no_movement']; closing.status = 'submitted'; closing.submitted_at = timezone.now(); closing.save(); messages.success(self.request, 'Fechamento enviado com sucesso.'); return redirect('closing_list')
+        ctx = super().get_context_data(**kwargs)
+        ctx['submitted_closings'] = (
+            MonthlyClosing.objects
+            .filter(status=MonthlyClosing.STATUS_SUBMITTED)
+            .select_related('participant')
+            .order_by('submitted_at')
+        )
+        ctx['recent_closings'] = (
+            MonthlyClosing.objects
+            .filter(status__in=[MonthlyClosing.STATUS_APPROVED, MonthlyClosing.STATUS_REJECTED])
+            .select_related('participant', 'reviewed_by')
+            .order_by('-reviewed_at')[:20]
+        )
+        return ctx
 
-class ManagerClosingListView(ManagerRequiredMixin, ListView):
-    model = MonthlyClosing; template_name = 'compliance/manager_closing_list.html'; context_object_name = 'closings'
-    def get_queryset(self):
-        org = getattr(self.request.user, 'current_organization', None)
-        return MonthlyClosing.objects.select_related('participant', 'reviewed_by').filter(participant__organization=org) if org else MonthlyClosing.objects.none()
 
-class ManagerClosingApproveView(ManagerRequiredMixin, ListView):
-    model = MonthlyClosing; template_name = 'compliance/manager_closing_list.html'
-    def get(self, request, *args, **kwargs):
-        org = getattr(request.user, 'current_organization', None)
-        closing = get_object_or_404(MonthlyClosing.objects.filter(participant__organization=org), pk=kwargs['pk'])
-        closing.status = 'approved'; closing.reviewed_at = timezone.now(); closing.reviewed_by = request.user; closing.save(); messages.success(request, 'Fechamento aprovado.'); return redirect('manager_closing_list')
+# ---------------------------------------------------------------------------
+# Gestor: detalhes de um fechamento (para revisar antes de aprovar/rejeitar)
+# ---------------------------------------------------------------------------
 
-class ManagerClosingRejectView(ManagerRequiredMixin, ListView):
-    model = MonthlyClosing; template_name = 'compliance/manager_closing_list.html'
-    def get(self, request, *args, **kwargs):
-        org = getattr(request.user, 'current_organization', None)
-        closing = get_object_or_404(MonthlyClosing.objects.filter(participant__organization=org), pk=kwargs['pk'])
-        closing.status = 'rejected'; closing.reviewed_at = timezone.now(); closing.reviewed_by = request.user; closing.save(); messages.success(request, 'Fechamento rejeitado.'); return redirect('manager_closing_list')
+class ClosingDetailView(ManagerRequiredMixin, TemplateView):
+    template_name = 'compliance/closing_detail.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        closing = get_object_or_404(MonthlyClosing, pk=self.kwargs['pk'])
+        ctx['closing'] = closing
+
+        # Busca os lançamentos do período
+        ctx['entries'] = EntryRecord.objects.filter(
+            participant=closing.participant,
+            data__year=closing.year,
+            data__month=closing.month,
+        ).order_by('data')
+
+        ctx['sales'] = SaleRecord.objects.filter(
+            participant=closing.participant,
+            data__year=closing.year,
+            data__month=closing.month,
+        ).order_by('data')
+
+        ctx['transformations'] = TransformationRecord.objects.filter(
+            participant=closing.participant,
+            data__year=closing.year,
+            data__month=closing.month,
+        ).order_by('data')
+
+        return ctx
+
+
+# ---------------------------------------------------------------------------
+# Gestor: aprovar fechamento
+# ---------------------------------------------------------------------------
+
+class ApproveClosingView(ManagerRequiredMixin, View):
+    def post(self, request, pk):
+        closing = get_object_or_404(MonthlyClosing, pk=pk)
+
+        if closing.status != MonthlyClosing.STATUS_SUBMITTED:
+            messages.error(request, 'Somente fechamentos "Aguardando aprovação" podem ser aprovados.')
+            return redirect('manager_closing_dashboard')
+
+        closing.status = MonthlyClosing.STATUS_APPROVED
+        closing.reviewed_at = timezone.now()
+        closing.reviewed_by = request.user
+        closing.rejection_reason = None
+        closing.save()
+
+        messages.success(
+            request,
+            f'Fechamento de {closing.period_display} ({closing.participant}) aprovado com sucesso.'
+        )
+        return redirect('manager_closing_dashboard')
+
+
+# ---------------------------------------------------------------------------
+# Gestor: rejeitar fechamento
+# ---------------------------------------------------------------------------
+
+class RejectClosingView(ManagerRequiredMixin, View):
+    def post(self, request, pk):
+        closing = get_object_or_404(MonthlyClosing, pk=pk)
+
+        if closing.status != MonthlyClosing.STATUS_SUBMITTED:
+            messages.error(request, 'Somente fechamentos "Aguardando aprovação" podem ser rejeitados.')
+            return redirect('manager_closing_dashboard')
+
+        reason = request.POST.get('rejection_reason', '').strip()
+        if not reason:
+            messages.error(request, 'É obrigatório informar o motivo da rejeição.')
+            return redirect('closing_detail', pk=pk)
+
+        closing.status = MonthlyClosing.STATUS_REJECTED
+        closing.reviewed_at = timezone.now()
+        closing.reviewed_by = request.user
+        closing.rejection_reason = reason
+        closing.save()
+
+        messages.warning(
+            request,
+            f'Fechamento de {closing.period_display} ({closing.participant}) rejeitado.'
+        )
+        return redirect('manager_closing_dashboard')

@@ -3,8 +3,6 @@ from .views import (
     EntryCreateView, EntryListView, EntryUpdateView,
     SaleCreateView, SaleListView, SaleUpdateView,
     TransformationCreateView, TransformationListView, TransformationUpdateView,
-    ManagerReviewEntryListView, ManagerReviewSaleListView,
-    ManagerReviewDashboardView, BulkApproveView,
     DocumentCenterView,
 )
 
@@ -18,9 +16,5 @@ urlpatterns = [
     path('transformations/', TransformationListView.as_view(), name='transformation_list'),
     path('transformations/new/', TransformationCreateView.as_view(), name='transformation_create'),
     path('transformations/<int:pk>/edit/', TransformationUpdateView.as_view(), name='transformation_update'),
-    path('manager/review/entries/', ManagerReviewEntryListView.as_view(), name='manager_review_entries'),
-    path('manager/review/sales/', ManagerReviewSaleListView.as_view(), name='manager_review_sales'),
-    path('manager/review/', ManagerReviewDashboardView.as_view(), name='manager_review_dashboard'),
-    path('manager/approve/', BulkApproveView.as_view(), name='bulk_approve'),
     path('documents/', DocumentCenterView.as_view(), name='document_center'),
 ]
