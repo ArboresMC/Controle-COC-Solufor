@@ -1,6 +1,15 @@
 from django.db import models
 
 
+UNIT_CHOICES = [
+    ('m3',  'm³'),
+    ('kg',  'kg'),
+    ('t',   't'),
+    ('un',  'un'),
+    ('mst', 'mst'),
+]
+
+
 class FSCClaim(models.Model):
     name = models.CharField('Declaração FSC', max_length=100, unique=True)
     code = models.SlugField('Código', max_length=50, unique=True)
@@ -17,12 +26,7 @@ class FSCClaim(models.Model):
 
 
 class Product(models.Model):
-    UNIT_CHOICES = [
-        ('m3', 'm³'),
-        ('kg', 'kg'),
-        ('t', 't'),
-        ('un', 'un'),
-    ]
+    UNIT_CHOICES = UNIT_CHOICES
     name = models.CharField('Produto', max_length=255)
     category = models.CharField('Categoria', max_length=100, blank=True)
     unit = models.CharField('Unidade', max_length=10, choices=UNIT_CHOICES)
@@ -60,8 +64,8 @@ class Counterparty(models.Model):
 
 class ProductUnitConversion(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='unit_conversions')
-    from_unit = models.CharField('Unidade de origem', max_length=10, choices=Product.UNIT_CHOICES)
-    to_unit = models.CharField('Unidade de destino', max_length=10, choices=Product.UNIT_CHOICES)
+    from_unit = models.CharField('Unidade de origem', max_length=10, choices=UNIT_CHOICES)
+    to_unit = models.CharField('Unidade de destino', max_length=10, choices=UNIT_CHOICES)
     factor = models.DecimalField('Fator de conversão', max_digits=14, decimal_places=6, help_text='Multiplica a quantidade da unidade de origem para chegar na unidade de destino.')
     notes = models.CharField('Observações', max_length=255, blank=True)
     active = models.BooleanField('Ativo', default=True)

@@ -1,8 +1,16 @@
-
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+
+UNIT_CHOICES = [
+    ('m3',  'm³'),
+    ('kg',  'kg'),
+    ('t',   't'),
+    ('un',  'un'),
+    ('mst', 'mst'),
+]
 
 
 def _safe_org_slug(instance):
@@ -46,8 +54,8 @@ class BaseMovement(models.Model):
     document_number = models.CharField('Número do documento', max_length=50)
     product = models.ForeignKey('catalog.Product', on_delete=models.PROTECT)
     quantity = models.DecimalField('Quantidade informada', max_digits=14, decimal_places=3)
-    movement_unit = models.CharField('Unidade informada', max_length=10, choices=[('m3', 'm³'), ('kg', 'kg'), ('t', 't'), ('un', 'un')], blank=True)
-    unit_snapshot = models.CharField('Unidade base', max_length=10, choices=[('m3', 'm³'), ('kg', 'kg'), ('t', 't'), ('un', 'un')])
+    movement_unit = models.CharField('Unidade informada', max_length=10, choices=UNIT_CHOICES, blank=True)
+    unit_snapshot = models.CharField('Unidade base', max_length=10, choices=UNIT_CHOICES)
     quantity_base = models.DecimalField('Quantidade convertida (unidade base)', max_digits=14, decimal_places=3, default=0)
     fsc_claim = models.CharField('Declaração FSC', max_length=100, blank=True)
     batch_code = models.CharField('Lote', max_length=100, blank=True)
@@ -121,11 +129,11 @@ class TransformationRecord(models.Model):
     fsc_claim = models.CharField('Declaração FSC', max_length=100, blank=True)
     source_product = models.ForeignKey('catalog.Product', on_delete=models.PROTECT, related_name='transformations_as_source')
     source_quantity = models.DecimalField('Quantidade origem', max_digits=14, decimal_places=3)
-    source_unit = models.CharField('Unidade origem informada', max_length=10, choices=[('m3', 'm³'), ('kg', 'kg'), ('t', 't'), ('un', 'un')])
+    source_unit = models.CharField('Unidade origem informada', max_length=10, choices=UNIT_CHOICES)
     source_quantity_base = models.DecimalField('Quantidade origem convertida', max_digits=14, decimal_places=3, default=0)
     target_product = models.ForeignKey('catalog.Product', on_delete=models.PROTECT, related_name='transformations_as_target')
     target_quantity_base = models.DecimalField('Quantidade destino gerada', max_digits=14, decimal_places=3, default=0)
-    target_unit_snapshot = models.CharField('Unidade base destino', max_length=10, choices=[('m3', 'm³'), ('kg', 'kg'), ('t', 't'), ('un', 'un')])
+    target_unit_snapshot = models.CharField('Unidade base destino', max_length=10, choices=UNIT_CHOICES)
     yield_factor_snapshot = models.DecimalField('Fator de rendimento aplicado', max_digits=14, decimal_places=6, default=0)
     notes = models.TextField('Observações', blank=True)
     attachment = models.FileField(upload_to=transformation_attachment_path, blank=True, null=True)
@@ -168,7 +176,7 @@ class TraceLot(models.Model):
     movement_date = models.DateField('Data de origem')
     quantity_base = models.DecimalField('Quantidade do lote', max_digits=14, decimal_places=3, default=0)
     quantity_available = models.DecimalField('Saldo disponível', max_digits=14, decimal_places=3, default=0, db_index=True)
-    unit_snapshot = models.CharField('Unidade base', max_length=10, choices=[('m3', 'm³'), ('kg', 'kg'), ('t', 't'), ('un', 'un')])
+    unit_snapshot = models.CharField('Unidade base', max_length=10, choices=UNIT_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
