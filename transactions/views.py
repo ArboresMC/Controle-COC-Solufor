@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Count, Sum
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, ListView, TemplateView, UpdateView
+from django.views.generic import CreateView, ListView, TemplateView, UpdateView, View
 from catalog.models import Counterparty, Product
 from compliance.models import MonthlyClosing
 from participants.models import Participant
