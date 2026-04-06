@@ -46,6 +46,19 @@
     }
     .doc-action svg { width: 16px; height: 16px; flex: 0 0 16px; }
     .doc-empty { color: #8aa1ad; font-weight: 600; }
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(15,23,42,.07);
+    }
+    .pagination-info { color: var(--muted); font-size: 13px; }
+    .pagination-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn.small { padding: 6px 12px; font-size: 13px; }
   </style>
 
   {% if records %}
@@ -71,6 +84,26 @@
     </tr>
     {% endfor %}
   </table></div>
-  {% else %}<div class="empty-state">Nenhuma entrada cadastrada ainda.</div>{% endif %}
+
+  {% if is_paginated %}
+  <div class="pagination">
+    <span class="pagination-info">
+      Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+      &nbsp;·&nbsp; {{ page_obj.paginator.count }} registros
+    </span>
+    <div class="pagination-controls">
+      {% if page_obj.has_previous %}
+        <a class="btn secondary small" href="?page=1">«</a>
+        <a class="btn secondary small" href="?page={{ page_obj.previous_page_number }}">‹ Anterior</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a class="btn secondary small" href="?page={{ page_obj.next_page_number }}">Próxima ›</a>
+        <a class="btn secondary small" href="?page={{ page_obj.paginator.num_pages }}">»</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}<div class="empty-state">Nenhuma saída cadastrada ainda.</div>{% endif %}
 </div>
 {% endblock %}

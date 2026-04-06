@@ -272,10 +272,10 @@ class DocumentCenterView(LoginRequiredMixin, TemplateView):
         return ctx
 
 class EntryListView(ParticipantScopedMixin, ListView):
-    model = EntryRecord; template_name = 'transactions/entry_list.html'; context_object_name = 'records'
+    model = EntryRecord; template_name = 'transactions/entry_list.html'; context_object_name = 'records'; paginate_by = 50
 
 class SaleListView(ParticipantScopedMixin, ListView):
-    model = SaleRecord; template_name = 'transactions/sale_list.html'; context_object_name = 'records'
+    model = SaleRecord; template_name = 'transactions/sale_list.html'; context_object_name = 'records'; paginate_by = 50
 
 class TransformationListView(LoginRequiredMixin, ListView):
     model = TransformationRecord; template_name = 'transactions/transformation_list.html'; context_object_name = 'records'
