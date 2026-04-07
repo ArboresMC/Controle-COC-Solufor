@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
+import django.utils.timezone
 
 
 class Migration(migrations.Migration):
@@ -54,6 +55,22 @@ class Migration(migrations.Migration):
                     ALTER TABLE compliance_monthlyclosing
                     ADD COLUMN reviewed_by_id INTEGER NULL;
                 END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='compliance_monthlyclosing' AND column_name='created_at'
+                ) THEN
+                    ALTER TABLE compliance_monthlyclosing
+                    ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='compliance_monthlyclosing' AND column_name='updated_at'
+                ) THEN
+                    ALTER TABLE compliance_monthlyclosing
+                    ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+                END IF;
             END
             $$;
             """,
@@ -100,6 +117,17 @@ class Migration(migrations.Migration):
                         related_name='reviewed_closings',
                         to=settings.AUTH_USER_MODEL,
                     ),
+                ),
+                migrations.AddField(
+                    model_name='monthlyclosing',
+                    name='created_at',
+                    field=models.DateTimeField(auto_now_add=True, default=django.utils.timezone.now),
+                    preserve_default=False,
+                ),
+                migrations.AddField(
+                    model_name='monthlyclosing',
+                    name='updated_at',
+                    field=models.DateTimeField(auto_now=True),
                 ),
             ],
         ),
