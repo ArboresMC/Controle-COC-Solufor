@@ -43,10 +43,12 @@ class MyClosingsView(ParticipantRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         today = timezone.now()
         ctx['current_year'] = today.year
-        ctx['months'] = [
-            (i, calendar.month_name[i].capitalize())
-            for i in range(1, 13)
+        ctx['current_month'] = today.month
+        meses_pt = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
         ]
+        ctx['months'] = [(i + 1, meses_pt[i]) for i in range(12)]
         return ctx
 
 

@@ -22,7 +22,7 @@
     {% csrf_token %}
     <select name="month" class="form-control" required>
       {% for n, name in months %}
-        <option value="{{ n }}">{{ name }}</option>
+        <option value="{{ n }}" {% if n == current_month %}selected{% endif %}>{{ name }}</option>
       {% endfor %}
     </select>
     <input type="number" name="year" value="{{ current_year }}" min="2020" max="2099"
