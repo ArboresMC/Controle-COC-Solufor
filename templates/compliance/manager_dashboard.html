@@ -35,7 +35,7 @@
             <small class="muted">Enviado em {{ closing.submitted_at|date:"d/m/Y H:i" }}</small>
           </div>
           <div class="closing-actions" style="flex-wrap:wrap; gap:8px;">
-            <a href="{% url 'closing_detail' closing.pk %}" class="btn" style="background:var(--primary-soft); color:var(--primary); box-shadow:none;">
+            <a href="{% url 'closing_detail' closing.pk %}" class="btn secondary">Ver lançamentos</a>
               Ver lançamentos
             </a>
 
