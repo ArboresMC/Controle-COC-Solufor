@@ -136,21 +136,21 @@ class ClosingDetailView(ManagerRequiredMixin, TemplateView):
         # Busca os lançamentos do período
         ctx['entries'] = EntryRecord.objects.filter(
             participant=closing.participant,
-            data__year=closing.year,
-            data__month=closing.month,
-        ).order_by('data')
+            movement_date__year=closing.year,
+            movement_date__month=closing.month,
+        ).order_by('movement_date')
 
         ctx['sales'] = SaleRecord.objects.filter(
             participant=closing.participant,
-            data__year=closing.year,
-            data__month=closing.month,
-        ).order_by('data')
+            movement_date__year=closing.year,
+            movement_date__month=closing.month,
+        ).order_by('movement_date')
 
         ctx['transformations'] = TransformationRecord.objects.filter(
             participant=closing.participant,
-            data__year=closing.year,
-            data__month=closing.month,
-        ).order_by('data')
+            movement_date__year=closing.year,
+            movement_date__month=closing.month,
+        ).order_by('movement_date')
 
         return ctx
 
