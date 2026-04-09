@@ -305,7 +305,7 @@ input[type='checkbox'] { width: auto; }
         <div class="sidebar-section">
           <div class="sidebar-label">Controle</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if '/transactions/manager/review/' in request.path %}is-active{% endif %}" href="/transactions/manager/review/entries/"><span class="sidebar-icon">✅</span><span class="sidebar-link-text">Revisão</span></a>
+            <a class="sidebar-link {% if '/compliance/gestor/' in request.path %}is-active{% endif %}" href="/compliance/gestor/fechamentos/"><span class="sidebar-icon">✅</span><span class="sidebar-link-text">Fechamentos</span></a>
             <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon">📎</span><span class="sidebar-link-text">Documentos</span></a>
             <a class="sidebar-link {% if '/reports/traceability/' in request.path %}is-active{% endif %}" href="/reports/traceability/"><span class="sidebar-icon">🔎</span><span class="sidebar-link-text">Rastreabilidade</span></a>
             <a class="sidebar-link" href="/reports/consolidated.xlsx"><span class="sidebar-icon">📄</span><span class="sidebar-link-text">Relatório FSC</span></a>
