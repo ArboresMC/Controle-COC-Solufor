@@ -1,3 +1,4 @@
+import calendar
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
@@ -9,10 +10,6 @@ from .models import MonthlyClosing
 from participants.models import Participant
 from transactions.models import EntryRecord, SaleRecord, TransformationRecord
 
-
-# ---------------------------------------------------------------------------
-# Mixin de permissão simples
-# ---------------------------------------------------------------------------
 
 class ManagerRequiredMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
@@ -33,10 +30,6 @@ class ParticipantRequiredMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
-# ---------------------------------------------------------------------------
-# Participante: lista dos seus fechamentos
-# ---------------------------------------------------------------------------
-
 class MyClosingsView(ParticipantRequiredMixin, ListView):
     template_name = 'compliance/my_closings.html'
     context_object_name = 'closings'
@@ -46,10 +39,16 @@ class MyClosingsView(ParticipantRequiredMixin, ListView):
             participant=self.request.user.participant
         ).order_by('-year', '-month')
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        today = timezone.now()
+        ctx['current_year'] = today.year
+        ctx['months'] = [
+            (i, calendar.month_name[i].capitalize())
+            for i in range(1, 13)
+        ]
+        return ctx
 
-# ---------------------------------------------------------------------------
-# Participante: enviar fechamento para aprovação
-# ---------------------------------------------------------------------------
 
 class SubmitClosingView(ParticipantRequiredMixin, View):
     def post(self, request, pk):
@@ -64,7 +63,7 @@ class SubmitClosingView(ParticipantRequiredMixin, View):
 
         closing.status = MonthlyClosing.STATUS_SUBMITTED
         closing.submitted_at = timezone.now()
-        closing.rejection_reason = None  # limpa rejeição anterior se houver
+        closing.rejection_reason = None
         closing.save()
 
         messages.success(
@@ -73,10 +72,6 @@ class SubmitClosingView(ParticipantRequiredMixin, View):
         )
         return redirect('my_closings')
 
-
-# ---------------------------------------------------------------------------
-# Participante: criar fechamento para um período (se não existir)
-# ---------------------------------------------------------------------------
 
 class CreateClosingView(ParticipantRequiredMixin, View):
     def post(self, request):
@@ -96,10 +91,6 @@ class CreateClosingView(ParticipantRequiredMixin, View):
 
         return redirect('my_closings')
 
-
-# ---------------------------------------------------------------------------
-# Gestor: dashboard de pendências
-# ---------------------------------------------------------------------------
 
 class ManagerClosingDashboardView(ManagerRequiredMixin, TemplateView):
     template_name = 'compliance/manager_dashboard.html'
@@ -121,10 +112,6 @@ class ManagerClosingDashboardView(ManagerRequiredMixin, TemplateView):
         return ctx
 
 
-# ---------------------------------------------------------------------------
-# Gestor: detalhes de um fechamento (para revisar antes de aprovar/rejeitar)
-# ---------------------------------------------------------------------------
-
 class ClosingDetailView(ManagerRequiredMixin, TemplateView):
     template_name = 'compliance/closing_detail.html'
 
@@ -133,7 +120,6 @@ class ClosingDetailView(ManagerRequiredMixin, TemplateView):
         closing = get_object_or_404(MonthlyClosing, pk=self.kwargs['pk'])
         ctx['closing'] = closing
 
-        # Busca os lançamentos do período
         ctx['entries'] = EntryRecord.objects.filter(
             participant=closing.participant,
             movement_date__year=closing.year,
@@ -155,10 +141,6 @@ class ClosingDetailView(ManagerRequiredMixin, TemplateView):
         return ctx
 
 
-# ---------------------------------------------------------------------------
-# Gestor: aprovar fechamento
-# ---------------------------------------------------------------------------
-
 class ApproveClosingView(ManagerRequiredMixin, View):
     def post(self, request, pk):
         closing = get_object_or_404(MonthlyClosing, pk=pk)
@@ -179,10 +161,6 @@ class ApproveClosingView(ManagerRequiredMixin, View):
         )
         return redirect('manager_closing_dashboard')
 
-
-# ---------------------------------------------------------------------------
-# Gestor: rejeitar fechamento
-# ---------------------------------------------------------------------------
 
 class RejectClosingView(ManagerRequiredMixin, View):
     def post(self, request, pk):
