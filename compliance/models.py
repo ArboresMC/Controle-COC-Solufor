@@ -60,8 +60,11 @@ class MonthlyClosing(models.Model):
 
     @property
     def period_display(self):
-        import calendar
-        return f"{calendar.month_name[self.month].capitalize()}/{self.year}"
+        meses_pt = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ]
+        return f"{meses_pt[self.month - 1]}/{self.year}"
 
     @property
     def is_editable(self):
