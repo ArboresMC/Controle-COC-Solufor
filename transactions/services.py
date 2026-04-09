@@ -352,7 +352,7 @@ def get_manager_alerts(*, today=None, organization=None):
     closings = closings.filter(participant__organization=organization) if organization else MonthlyClosing.objects.none()
     without_closing = active_participants.exclude(id__in=closings.values_list('participant_id', flat=True))
     if without_closing.exists():
-        alerts.append({'level': 'warning','title': 'Participantes sem fechamento','description': f'{without_closing.count()} participante(s) ainda sem fechamento na competência atual.','url': '/compliance/manager/'})
+        alerts.append({'level': 'warning','title': 'Participantes sem fechamento','description': f'{without_closing.count()} participante(s) ainda sem fechamento na competência atual.','url': '/compliance/gestor/fechamentos/'})
     corrections_entries = EntryRecord.objects.filter(status='needs_correction')
     corrections_sales = SaleRecord.objects.filter(status='needs_correction')
     if organization:
@@ -362,7 +362,7 @@ def get_manager_alerts(*, today=None, organization=None):
         corrections_entries = EntryRecord.objects.none(); corrections_sales = SaleRecord.objects.none()
     corrections = corrections_entries.count() + corrections_sales.count()
     if corrections:
-        alerts.append({'level': 'danger','title': 'Pendências de revisão','description': f'Existem {corrections} lançamentos aguardando correção ou validação da gestão.','url': '/transactions/manager/review/entries/'})
+        alerts.append({'level': 'danger','title': 'Pendências de revisão','description': f'Existem {corrections} lançamentos aguardando correção ou validação da gestão.','url': '/compliance/gestor/fechamentos/'})
     no_movement = []
     for participant in active_participants:
         movement_exists = EntryRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists() or SaleRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists()
