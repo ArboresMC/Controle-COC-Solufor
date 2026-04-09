@@ -368,7 +368,7 @@ def get_manager_alerts(*, today=None, organization=None):
         movement_exists = EntryRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists() or SaleRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists()
         if not movement_exists: no_movement.append(participant)
     if no_movement:
-        alerts.append({'level': 'info','title': 'Participantes sem movimento','description': f'{len(no_movement)} participante(s) ainda sem compras ou vendas registradas no mês atual.','url': '/'})
+        alerts.append({'level': 'info','title': 'Participantes sem movimento','description': f'{len(no_movement)} participante(s) ainda sem compras ou vendas registradas no mês atual.','url': '/participants/'})
     low_participants = []
     for participant in active_participants:
         low_count = len([b for b in get_balance_items(participant, projected=True) if b['status_class'] in ['warning', 'danger']])
