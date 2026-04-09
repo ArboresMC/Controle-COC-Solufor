@@ -29,7 +29,6 @@ class MonthlyClosing(models.Model):
         default=STATUS_OPEN,
     )
 
-    # Campos de auditoria
     submitted_at = models.DateTimeField(null=True, blank=True, verbose_name='Enviado em')
     reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name='Revisado em')
     reviewed_by = models.ForeignKey(
@@ -40,11 +39,12 @@ class MonthlyClosing(models.Model):
         related_name='reviewed_closings',
         verbose_name='Revisado por',
     )
-    rejection_reason = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name='Motivo da rejeição',
-    )
+    rejection_reason = models.TextField(blank=True, null=True, verbose_name='Motivo da rejeição')
+
+    # Campos herdados do modelo original — mantidos para compatibilidade com o banco
+    manager_notes = models.TextField(blank=True, default='', verbose_name='Observações do gestor')
+    participant_notes = models.TextField(blank=True, default='', verbose_name='Observações do participante')
+    declaration_no_movement = models.BooleanField(default=False, verbose_name='Sem movimentação')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -65,7 +65,6 @@ class MonthlyClosing(models.Model):
 
     @property
     def is_editable(self):
-        """Participante pode editar/reimportar apenas se open ou rejected."""
         return self.status in (self.STATUS_OPEN, self.STATUS_REJECTED)
 
     @property
