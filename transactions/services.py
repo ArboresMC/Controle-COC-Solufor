@@ -332,12 +332,12 @@ def get_participant_alerts(participant, *, today=None):
         alerts.append({'level': 'danger','title': 'Pendências de correção','description': f'Existem {corrections} lançamentos aguardando correção ou revisão.','url': '/'})
     movement_exists = EntryRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists() or SaleRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists() or TransformationRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists()
     if not movement_exists:
-        alerts.append({'level': 'info','title': 'Sem movimentação no mês atual','description': 'Nenhuma entrada, saída ou transformação foi registrada nesta competência.','url': '/compliance/'})
+        alerts.append({'level': 'info','title': 'Sem movimentação no mês atual','description': 'Nenhuma entrada, saída ou transformação foi registrada nesta competência.','url': '/compliance/fechamentos/'})
     current_closing = MonthlyClosing.objects.filter(participant=participant, year=today.year, month=today.month).first()
     if not current_closing:
-        alerts.append({'level': 'warning','title': 'Fechamento mensal pendente','description': 'Ainda não existe fechamento aberto/enviado para o mês atual.','url': '/compliance/'})
+        alerts.append({'level': 'warning','title': 'Fechamento mensal pendente','description': 'Ainda não existe fechamento aberto/enviado para o mês atual.','url': '/compliance/fechamentos/'})
     elif current_closing.status in ['open', 'rejected', 'overdue']:
-        alerts.append({'level': 'warning' if current_closing.status != 'rejected' else 'danger','title': 'Fechamento mensal exige ação','description': f'Situação atual: {current_closing.get_status_display()}. Revise os lançamentos e conclua o fechamento.','url': '/compliance/'})
+        alerts.append({'level': 'warning' if current_closing.status != 'rejected' else 'danger','title': 'Fechamento mensal exige ação','description': f'Situação atual: {current_closing.get_status_display()}. Revise os lançamentos e conclua o fechamento.','url': '/compliance/fechamentos/'})
     return alerts
 
 def get_manager_alerts(*, today=None, organization=None):
