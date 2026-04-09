@@ -36,9 +36,7 @@
           </div>
           <div class="closing-actions" style="flex-wrap:wrap; gap:8px;">
             <a href="{% url 'closing_detail' closing.pk %}" class="btn secondary">Ver lançamentos</a>
-              Ver lançamentos
-            </a>
-
+           
             <!-- Aprovar -->
             <form method="post" action="{% url 'approve_closing' closing.pk %}" style="display:inline;">
               {% csrf_token %}
