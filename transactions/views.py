@@ -488,57 +488,75 @@ def _delete_entries_sql(entry_ids):
     ids = list(entry_ids)
     fmt = ','.join(['%s'] * len(ids))
     with connection.cursor() as c:
+        # Coleta IDs antes de deletar qualquer coisa
+        c.execute(f"""
+            SELECT DISTINCT la.sale_id
+            FROM transactions_lotallocation la
+            JOIN transactions_tracelot tl ON la.lot_id = tl.id
+            WHERE tl.entry_id IN ({fmt})
+            AND la.sale_id IS NOT NULL
+        """, ids)
+        sale_ids = [row[0] for row in c.fetchall()]
+
+        c.execute(f"""
+            SELECT DISTINCT la.transformation_id
+            FROM transactions_lotallocation la
+            JOIN transactions_tracelot tl ON la.lot_id = tl.id
+            WHERE tl.entry_id IN ({fmt})
+            AND la.transformation_id IS NOT NULL
+        """, ids)
+        transformation_ids = [row[0] for row in c.fetchall()]
+
+        # Agora deleta na ordem correta
+        # 1. LotAllocations dos lotes de transformação originados dessas entradas
+        if transformation_ids:
+            tfmt = ','.join(['%s'] * len(transformation_ids))
+            c.execute(f"""
+                DELETE FROM transactions_lotallocation
+                WHERE lot_id IN (
+                    SELECT id FROM transactions_tracelot
+                    WHERE transformation_id IN ({tfmt})
+                )
+            """, transformation_ids)
+            c.execute(f"""
+                DELETE FROM transactions_lotallocation
+                WHERE transformation_id IN ({tfmt})
+            """, transformation_ids)
+
+        # 2. LotAllocations dos lotes de entrada
         c.execute(f"""
             DELETE FROM transactions_lotallocation
             WHERE lot_id IN (
                 SELECT id FROM transactions_tracelot WHERE entry_id IN ({fmt})
             )
         """, ids)
-        c.execute(f"""
-            DELETE FROM transactions_lotallocation
-            WHERE lot_id IN (
-                SELECT id FROM transactions_tracelot
-                WHERE transformation_id IN (
-                    SELECT DISTINCT la.transformation_id
-                    FROM transactions_lotallocation la
-                    JOIN transactions_tracelot tl ON la.lot_id = tl.id
-                    WHERE tl.entry_id IN ({fmt})
-                    AND la.transformation_id IS NOT NULL
-                )
-            )
-        """, ids)
-        c.execute(f"""
-            DELETE FROM transactions_tracelot
-            WHERE transformation_id IN (
-                SELECT DISTINCT la.transformation_id
-                FROM transactions_lotallocation la
-                JOIN transactions_tracelot tl ON la.lot_id = tl.id
-                WHERE tl.entry_id IN ({fmt})
-                AND la.transformation_id IS NOT NULL
-            )
-        """, ids)
-        c.execute(f"""
-            DELETE FROM transactions_transformationrecord
-            WHERE id IN (
-                SELECT DISTINCT la.transformation_id
-                FROM transactions_lotallocation la
-                JOIN transactions_tracelot tl ON la.lot_id = tl.id
-                WHERE tl.entry_id IN ({fmt})
-                AND la.transformation_id IS NOT NULL
-            )
-        """, ids)
-        c.execute(f"""
-            DELETE FROM transactions_salerecord
-            WHERE id IN (
-                SELECT DISTINCT la.sale_id
-                FROM transactions_lotallocation la
-                JOIN transactions_tracelot tl ON la.lot_id = tl.id
-                WHERE tl.entry_id IN ({fmt})
-                AND la.sale_id IS NOT NULL
-            )
-        """, ids)
+
+        # 3. LotAllocations das saídas vinculadas
+        if sale_ids:
+            sfmt = ','.join(['%s'] * len(sale_ids))
+            c.execute(f"DELETE FROM transactions_lotallocation WHERE sale_id IN ({sfmt})", sale_ids)
+
+        # 4. TraceLots das transformações
+        if transformation_ids:
+            tfmt = ','.join(['%s'] * len(transformation_ids))
+            c.execute(f"DELETE FROM transactions_tracelot WHERE transformation_id IN ({tfmt})", transformation_ids)
+
+        # 5. TransformationRecords
+        if transformation_ids:
+            tfmt = ','.join(['%s'] * len(transformation_ids))
+            c.execute(f"DELETE FROM transactions_transformationrecord WHERE id IN ({tfmt})", transformation_ids)
+
+        # 6. SaleRecords
+        if sale_ids:
+            sfmt = ','.join(['%s'] * len(sale_ids))
+            c.execute(f"DELETE FROM transactions_salerecord WHERE id IN ({sfmt})", sale_ids)
+
+        # 7. TraceLots das entradas
         c.execute(f"DELETE FROM transactions_tracelot WHERE entry_id IN ({fmt})", ids)
+
+        # 8. EntryRecords
         c.execute(f"DELETE FROM transactions_entryrecord WHERE id IN ({fmt})", ids)
+
     return len(ids)
 
 
