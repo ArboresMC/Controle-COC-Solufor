@@ -168,6 +168,18 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
         participant_id = request.GET.get('participant')
         participant = Participant.objects.filter(pk=participant_id).first() if participant_id else None
         current_org = getattr(request.user, 'current_organization', None)
+        participants = list(Participant.objects.filter(status='active'))
+
+        # Gestor sem participante selecionado: não carrega dados (performance)
+        if (request.user.is_manager or request.user.is_auditor) and not participant:
+            return render(request, self.template_name, {
+                'rows': None,
+                'entry_balances': None,
+                'participants': participants,
+                'selected_participant': None,
+                'require_filter': True,
+            })
+
         scope_type = 'organization' if (request.user.is_manager or request.user.is_auditor) else 'participant'
         scope_id = getattr(current_org, 'id', None) if scope_type == 'organization' else getattr(getattr(request.user, 'participant', None), 'id', None)
         cache_extra = f"traceability:{participant_id or 'all'}"
@@ -176,12 +188,11 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
         if cached is None:
             rows = build_traceability_rows(participant=participant)
             entry_balances = get_entry_balance_rows(participant=participant)
-            participants = list(Participant.objects.filter(status='active'))
-            cached = {'rows': rows, 'entry_balances': entry_balances, 'participants': participants}
+            cached = {'rows': rows, 'entry_balances': entry_balances}
             cache.set(cache_key, cached, settings.CACHE_TTL_TRACEABILITY)
 
-        rows_paginator = Paginator(cached['rows'], 25)
-        balances_paginator = Paginator(cached['entry_balances'], 25)
+        rows_paginator = Paginator(cached['rows'], 10)
+        balances_paginator = Paginator(cached['entry_balances'], 10)
         rows_page = rows_paginator.get_page(request.GET.get('page'))
         balances_page = balances_paginator.get_page(request.GET.get('balance_page'))
         query_for_rows = request.GET.copy()
@@ -192,12 +203,13 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
         return render(request, self.template_name, {
             'rows': rows_page,
             'entry_balances': balances_page,
-            'participants': cached['participants'],
+            'participants': participants,
             'selected_participant': participant,
             'rows_page_obj': rows_page,
             'balances_page_obj': balances_page,
             'rows_query_string': query_for_rows.urlencode(),
             'balances_query_string': query_for_balances.urlencode(),
+            'require_filter': False,
         })
 
 
