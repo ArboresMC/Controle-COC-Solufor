@@ -4,6 +4,7 @@ from .views import (
     SaleCreateView, SaleListView, SaleUpdateView,
     TransformationCreateView, TransformationListView, TransformationUpdateView,
     DocumentCenterView,
+    DataManagementView, DataDeleteView, DataDeleteSingleView,
 )
 
 urlpatterns = [
@@ -17,4 +18,7 @@ urlpatterns = [
     path('transformations/new/', TransformationCreateView.as_view(), name='transformation_create'),
     path('transformations/<int:pk>/edit/', TransformationUpdateView.as_view(), name='transformation_update'),
     path('documents/', DocumentCenterView.as_view(), name='document_center'),
+    path('gestor/dados/', DataManagementView.as_view(), name='data_management'),
+    path('gestor/dados/excluir/', DataDeleteView.as_view(), name='data_delete'),
+    path('gestor/dados/excluir/unico/', DataDeleteSingleView.as_view(), name='data_delete_single'),
 ]

@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block hero_title %}Gerenciamento de Dados{% endblock %}
+{% block hero_text %}Exclua registros individualmente, por seleção múltipla ou em lote por participante. Todas as exclusões são permanentes e removem automaticamente os vínculos de rastreabilidade.{% endblock %}
+{% block content %}
+
+{% if messages %}
+  {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }}" style="padding:14px 16px;border-radius:12px;margin-bottom:14px;
+      background:{% if 'success' in msg.tags %}var(--success-soft){% elif 'error' in msg.tags %}var(--danger-soft){% else %}var(--warning-soft){% endif %};
+      color:{% if 'success' in msg.tags %}var(--success){% elif 'error' in msg.tags %}var(--danger){% else %}var(--warning){% endif %};
+      border:1px solid {% if 'success' in msg.tags %}rgba(21,128,61,.2){% elif 'error' in msg.tags %}rgba(180,35,24,.2){% else %}rgba(180,83,9,.2){% endif %};">
+      {{ msg }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<!-- Filtros -->
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Filtrar</div>
+      <h2 class="card-title">Selecione o participante e tipo de registro</h2>
+    </div>
+  </div>
+  <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <div>
+      <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;">Participante</label>
+      <select name="participant" style="min-width:280px;" onchange="this.form.submit()">
+        <option value="">— Selecione —</option>
+        {% for p in participants %}
+          <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;">Tipo</label>
+      <select name="type" style="min-width:180px;" onchange="this.form.submit()">
+        <option value="entries" {% if record_type == 'entries' %}selected{% endif %}>Entradas</option>
+        <option value="sales" {% if record_type == 'sales' %}selected{% endif %}>Saídas</option>
+        <option value="transformations" {% if record_type == 'transformations' %}selected{% endif %}>Transformações</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if selected_participant %}
+
+<!-- Ação: excluir todos -->
+<div class="card soft" style="margin-bottom:18px;border-left:4px solid var(--danger);">
+  <div class="card-header">
+    <div>
+      <div class="kicker" style="color:var(--danger);">Exclusão em lote</div>
+      <h2 class="card-title">Excluir todos os registros de {{ selected_participant }}</h2>
+      <p class="card-subtitle">Remove todos os registros do tipo selecionado deste participante, incluindo lotes e alocações vinculadas.</p>
+    </div>
+    <button class="btn danger" onclick="confirmDeleteAll()">Excluir tudo</button>
+  </div>
+</div>
+
+<!-- Modal confirmação excluir tudo -->
+<div id="modal-delete-all" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border-radius:var(--radius);padding:28px;max-width:480px;width:90%;box-shadow:var(--shadow);">
+    <h3 style="margin:0 0 12px;color:var(--danger);">⚠ Confirmar exclusão em lote</h3>
+    <p style="margin:0 0 8px;">Você está prestes a excluir <strong>todos os registros de {{ record_type|title }}</strong> de <strong>{{ selected_participant }}</strong>.</p>
+    <p style="margin:0 0 20px;color:var(--muted);font-size:14px;">Esta ação é <strong>permanente</strong> e não pode ser desfeita. Lotes e alocações vinculadas também serão removidos.</p>
+    <div style="display:flex;gap:10px;">
+      <form method="post" action="{% url 'data_delete' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_all">
+        <input type="hidden" name="record_type" value="{{ record_type }}">
+        <input type="hidden" name="participant_id" value="{{ selected_participant.id }}">
+        <button type="submit" class="btn danger">Confirmar exclusão</button>
+      </form>
+      <button class="btn secondary" onclick="closeModal('modal-delete-all')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tabela com checkboxes -->
+{% if records %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Registros</div>
+      <h2 class="card-title">
+        {% if record_type == 'entries' %}Entradas
+        {% elif record_type == 'sales' %}Saídas
+        {% else %}Transformações{% endif %}
+        — {{ selected_participant }}
+      </h2>
+      <p class="card-subtitle">Marque os registros que deseja excluir e clique em "Excluir selecionados".</p>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'data_delete' %}" id="form-selected">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="delete_selected">
+    <input type="hidden" name="record_type" value="{{ record_type }}">
+    <input type="hidden" name="participant_id" value="{{ selected_participant.id }}">
+
+    <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;">
+      <button type="button" class="btn secondary" onclick="toggleAll()" style="font-size:13px;">Marcar/desmarcar tudo</button>
+      <button type="button" class="btn danger" onclick="confirmDeleteSelected()" style="font-size:13px;">Excluir selecionados</button>
+      <span id="selected-count" style="font-size:13px;color:var(--muted);">0 selecionados</span>
+    </div>
+
+    <div class="table-wrap compact-table">
+      <table>
+        <tr>
+          <th style="width:36px;"><input type="checkbox" id="check-all" onclick="toggleAll()"></th>
+          {% if record_type == 'entries' %}
+          <th>Data</th><th>Documento</th><th>Fornecedor</th><th>Produto</th><th>Quantidade</th><th>Ação</th>
+          {% elif record_type == 'sales' %}
+          <th>Data</th><th>Documento</th><th>Cliente</th><th>Produto</th><th>Quantidade</th><th>Ação</th>
+          {% else %}
+          <th>Data</th><th>Documento</th><th>Produto origem</th><th>Produto destino</th><th>Qtd produzida</th><th>Ação</th>
+          {% endif %}
+        </tr>
+        {% for record in records %}
+        <tr>
+          <td><input type="checkbox" name="selected_ids" value="{{ record.id }}" class="row-check" onchange="updateCount()"></td>
+          {% if record_type == 'entries' %}
+          <td>{{ record.movement_date|date:"d/m/Y" }}</td>
+          <td>{{ record.document_number }}</td>
+          <td>{{ record.supplier }}</td>
+          <td>{{ record.product }}</td>
+          <td>{{ record.quantity }} {{ record.movement_unit }}</td>
+          {% elif record_type == 'sales' %}
+          <td>{{ record.movement_date|date:"d/m/Y" }}</td>
+          <td>{{ record.document_number }}</td>
+          <td>{{ record.customer }}</td>
+          <td>{{ record.product }}</td>
+          <td>{{ record.quantity }} {{ record.movement_unit }}</td>
+          {% else %}
+          <td>{{ record.movement_date|date:"d/m/Y" }}</td>
+          <td>{{ record.document_number }}</td>
+          <td>{{ record.source_product }}</td>
+          <td>{{ record.target_product }}</td>
+          <td>{{ record.target_quantity_base }}</td>
+          {% endif %}
+          <td>
+            <button type="button" class="btn danger" style="min-height:32px;padding:0 10px;font-size:12px;"
+              onclick="confirmDeleteSingle('{{ record.id }}', '{{ record.document_number }}')">
+              Excluir
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </form>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">Nenhum registro encontrado para este participante.</div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+  <div class="empty-state">Selecione um participante acima para gerenciar os dados.</div>
+</div>
+{% endif %}
+
+<!-- Modal confirmação excluir selecionados -->
+<div id="modal-delete-selected" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border-radius:var(--radius);padding:28px;max-width:480px;width:90%;box-shadow:var(--shadow);">
+    <h3 style="margin:0 0 12px;color:var(--danger);">⚠ Confirmar exclusão</h3>
+    <p style="margin:0 0 8px;">Você está prestes a excluir os <strong id="modal-count">0</strong> registro(s) selecionado(s).</p>
+    <p style="margin:0 0 20px;color:var(--muted);font-size:14px;">Esta ação é <strong>permanente</strong>. Lotes e alocações vinculadas também serão removidos.</p>
+    <div style="display:flex;gap:10px;">
+      <button type="button" class="btn danger" onclick="document.getElementById('form-selected').submit()">Confirmar exclusão</button>
+      <button class="btn secondary" onclick="closeModal('modal-delete-selected')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmação excluir individual -->
+<div id="modal-delete-single" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border-radius:var(--radius);padding:28px;max-width:480px;width:90%;box-shadow:var(--shadow);">
+    <h3 style="margin:0 0 12px;color:var(--danger);">⚠ Confirmar exclusão</h3>
+    <p style="margin:0 0 8px;">Excluir o registro <strong id="modal-doc"></strong>?</p>
+    <p style="margin:0 0 20px;color:var(--muted);font-size:14px;">Esta ação é <strong>permanente</strong>. Lotes e alocações vinculadas também serão removidos.</p>
+    <div style="display:flex;gap:10px;">
+      <form method="post" action="{% url 'data_delete_single' %}" id="form-single">
+        {% csrf_token %}
+        <input type="hidden" name="record_type" value="{{ record_type }}">
+        <input type="hidden" name="participant_id" value="{% if selected_participant %}{{ selected_participant.id }}{% endif %}">
+        <input type="hidden" name="record_id" id="single-record-id" value="">
+        <button type="submit" class="btn danger">Confirmar exclusão</button>
+      </form>
+      <button class="btn secondary" onclick="closeModal('modal-delete-single')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showModal(id) {
+  const m = document.getElementById(id);
+  m.style.display = 'flex';
+}
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+function confirmDeleteAll() {
+  showModal('modal-delete-all');
+}
+function confirmDeleteSelected() {
+  const count = document.querySelectorAll('.row-check:checked').length;
+  if (count === 0) { alert('Selecione pelo menos um registro.'); return; }
+  document.getElementById('modal-count').textContent = count;
+  showModal('modal-delete-selected');
+}
+function confirmDeleteSingle(id, doc) {
+  document.getElementById('single-record-id').value = id;
+  document.getElementById('modal-doc').textContent = doc || 'ID ' + id;
+  showModal('modal-delete-single');
+}
+function toggleAll() {
+  const all = document.getElementById('check-all');
+  const checks = document.querySelectorAll('.row-check');
+  checks.forEach(c => c.checked = all.checked);
+  updateCount();
+}
+function updateCount() {
+  const count = document.querySelectorAll('.row-check:checked').length;
+  document.getElementById('selected-count').textContent = count + ' selecionado(s)';
+}
+window.addEventListener('click', function(e) {
+  ['modal-delete-all','modal-delete-selected','modal-delete-single'].forEach(id => {
+    const m = document.getElementById(id);
+    if (m && e.target === m) closeModal(id);
+  });
+});
+</script>
+{% endblock %}

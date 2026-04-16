@@ -473,3 +473,212 @@ class TransformationUpdateView(TransformationCreateView, UpdateView):
         except Exception as exc:
             form.add_error('source_lot', str(exc)); return self.form_invalid(form)
         messages.success(self.request, 'Transformação atualizada com sucesso.'); return redirect(self.success_url)
+
+
+# =============================================================================
+# GERENCIAMENTO DE DADOS — Gestor
+# =============================================================================
+
+from django.db import connection
+
+
+def _delete_entries_sql(entry_ids):
+    if not entry_ids:
+        return 0
+    ids = list(entry_ids)
+    fmt = ','.join(['%s'] * len(ids))
+    with connection.cursor() as c:
+        c.execute(f"""
+            DELETE FROM transactions_lotallocation
+            WHERE lot_id IN (
+                SELECT id FROM transactions_tracelot WHERE entry_id IN ({fmt})
+            )
+        """, ids)
+        c.execute(f"""
+            DELETE FROM transactions_lotallocation
+            WHERE lot_id IN (
+                SELECT id FROM transactions_tracelot
+                WHERE transformation_id IN (
+                    SELECT DISTINCT la.transformation_id
+                    FROM transactions_lotallocation la
+                    JOIN transactions_tracelot tl ON la.lot_id = tl.id
+                    WHERE tl.entry_id IN ({fmt})
+                    AND la.transformation_id IS NOT NULL
+                )
+            )
+        """, ids)
+        c.execute(f"""
+            DELETE FROM transactions_tracelot
+            WHERE transformation_id IN (
+                SELECT DISTINCT la.transformation_id
+                FROM transactions_lotallocation la
+                JOIN transactions_tracelot tl ON la.lot_id = tl.id
+                WHERE tl.entry_id IN ({fmt})
+                AND la.transformation_id IS NOT NULL
+            )
+        """, ids)
+        c.execute(f"""
+            DELETE FROM transactions_transformationrecord
+            WHERE id IN (
+                SELECT DISTINCT la.transformation_id
+                FROM transactions_lotallocation la
+                JOIN transactions_tracelot tl ON la.lot_id = tl.id
+                WHERE tl.entry_id IN ({fmt})
+                AND la.transformation_id IS NOT NULL
+            )
+        """, ids)
+        c.execute(f"""
+            DELETE FROM transactions_salerecord
+            WHERE id IN (
+                SELECT DISTINCT la.sale_id
+                FROM transactions_lotallocation la
+                JOIN transactions_tracelot tl ON la.lot_id = tl.id
+                WHERE tl.entry_id IN ({fmt})
+                AND la.sale_id IS NOT NULL
+            )
+        """, ids)
+        c.execute(f"DELETE FROM transactions_tracelot WHERE entry_id IN ({fmt})", ids)
+        c.execute(f"DELETE FROM transactions_entryrecord WHERE id IN ({fmt})", ids)
+    return len(ids)
+
+
+def _delete_sales_sql(sale_ids):
+    if not sale_ids:
+        return 0
+    ids = list(sale_ids)
+    fmt = ','.join(['%s'] * len(ids))
+    with connection.cursor() as c:
+        c.execute(f"DELETE FROM transactions_lotallocation WHERE sale_id IN ({fmt})", ids)
+        c.execute(f"DELETE FROM transactions_salerecord WHERE id IN ({fmt})", ids)
+    return len(ids)
+
+
+def _delete_transformations_sql(transformation_ids):
+    if not transformation_ids:
+        return 0
+    ids = list(transformation_ids)
+    fmt = ','.join(['%s'] * len(ids))
+    with connection.cursor() as c:
+        c.execute(f"""
+            DELETE FROM transactions_lotallocation
+            WHERE lot_id IN (
+                SELECT id FROM transactions_tracelot WHERE transformation_id IN ({fmt})
+            )
+        """, ids)
+        c.execute(f"DELETE FROM transactions_lotallocation WHERE transformation_id IN ({fmt})", ids)
+        c.execute(f"DELETE FROM transactions_tracelot WHERE transformation_id IN ({fmt})", ids)
+        c.execute(f"DELETE FROM transactions_transformationrecord WHERE id IN ({fmt})", ids)
+    return len(ids)
+
+
+class DataManagementView(ManagerRequiredMixin, TemplateView):
+    template_name = 'transactions/data_management.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        current_org = getattr(user, 'current_organization', None)
+
+        participant_id = self.request.GET.get('participant')
+        record_type = self.request.GET.get('type', 'entries')
+
+        participants = Participant.objects.filter(
+            status='active', organization=current_org
+        ).order_by('trade_name', 'legal_name') if current_org else Participant.objects.none()
+
+        selected_participant = participants.filter(pk=participant_id).first() if participant_id else None
+
+        records = []
+        if selected_participant:
+            if record_type == 'entries':
+                records = EntryRecord.objects.filter(
+                    participant=selected_participant
+                ).select_related('product', 'supplier').order_by('-movement_date', '-id')[:200]
+            elif record_type == 'sales':
+                records = SaleRecord.objects.filter(
+                    participant=selected_participant
+                ).select_related('product', 'customer').order_by('-movement_date', '-id')[:200]
+            elif record_type == 'transformations':
+                records = TransformationRecord.objects.filter(
+                    participant=selected_participant
+                ).select_related('source_product', 'target_product').order_by('-movement_date', '-id')[:200]
+
+        ctx.update({
+            'participants': participants,
+            'selected_participant': selected_participant,
+            'record_type': record_type,
+            'records': records,
+        })
+        return ctx
+
+
+class DataDeleteView(ManagerRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        current_org = getattr(request.user, 'current_organization', None)
+        action = request.POST.get('action')
+        record_type = request.POST.get('record_type', 'entries')
+        participant_id = request.POST.get('participant_id')
+
+        participant = Participant.objects.filter(
+            pk=participant_id, organization=current_org
+        ).first() if participant_id and current_org else None
+
+        if not participant:
+            messages.error(request, 'Participante não encontrado.')
+            return redirect('data_management')
+
+        if action == 'delete_selected':
+            selected_ids = request.POST.getlist('selected_ids')
+            if not selected_ids:
+                messages.warning(request, 'Nenhum registro selecionado.')
+                return redirect(f'/transactions/gestor/dados/?participant={participant_id}&type={record_type}')
+            ids = [int(i) for i in selected_ids if i.isdigit()]
+            if record_type == 'entries':
+                count = _delete_entries_sql(ids)
+                messages.success(request, f'{count} entrada(s) excluída(s) com sucesso.')
+            elif record_type == 'sales':
+                count = _delete_sales_sql(ids)
+                messages.success(request, f'{count} saída(s) excluída(s) com sucesso.')
+            elif record_type == 'transformations':
+                count = _delete_transformations_sql(ids)
+                messages.success(request, f'{count} transformação(ões) excluída(s) com sucesso.')
+
+        elif action == 'delete_all':
+            if record_type == 'entries':
+                ids = list(EntryRecord.objects.filter(participant=participant).values_list('id', flat=True))
+                count = _delete_entries_sql(ids)
+                messages.success(request, f'Todos os {count} registros de entradas de {participant} foram excluídos.')
+            elif record_type == 'sales':
+                ids = list(SaleRecord.objects.filter(participant=participant).values_list('id', flat=True))
+                count = _delete_sales_sql(ids)
+                messages.success(request, f'Todos os {count} registros de saídas de {participant} foram excluídos.')
+            elif record_type == 'transformations':
+                ids = list(TransformationRecord.objects.filter(participant=participant).values_list('id', flat=True))
+                count = _delete_transformations_sql(ids)
+                messages.success(request, f'Todos os {count} registros de transformações de {participant} foram excluídos.')
+
+        return redirect(f'/transactions/gestor/dados/?participant={participant_id}&type={record_type}')
+
+
+class DataDeleteSingleView(ManagerRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        record_type = request.POST.get('record_type')
+        record_id = request.POST.get('record_id')
+        participant_id = request.POST.get('participant_id')
+
+        if not record_id or not record_id.isdigit():
+            messages.error(request, 'Registro inválido.')
+            return redirect('data_management')
+
+        rid = int(record_id)
+        if record_type == 'entries':
+            _delete_entries_sql([rid])
+            messages.success(request, 'Entrada excluída com sucesso.')
+        elif record_type == 'sales':
+            _delete_sales_sql([rid])
+            messages.success(request, 'Saída excluída com sucesso.')
+        elif record_type == 'transformations':
+            _delete_transformations_sql([rid])
+            messages.success(request, 'Transformação excluída com sucesso.')
+
+        return redirect(f'/transactions/gestor/dados/?participant={participant_id}&type={record_type}')
