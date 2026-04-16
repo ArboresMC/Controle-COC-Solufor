@@ -180,8 +180,8 @@ class TraceabilityReportView(ManagerRequiredMixin, View):
             cached = {'rows': rows, 'entry_balances': entry_balances, 'participants': participants}
             cache.set(cache_key, cached, settings.CACHE_TTL_TRACEABILITY)
 
-        rows_paginator = Paginator(cached['rows'], 80)
-        balances_paginator = Paginator(cached['entry_balances'], 80)
+        rows_paginator = Paginator(cached['rows'], 25)
+        balances_paginator = Paginator(cached['entry_balances'], 25)
         rows_page = rows_paginator.get_page(request.GET.get('page'))
         balances_page = balances_paginator.get_page(request.GET.get('balance_page'))
         query_for_rows = request.GET.copy()
