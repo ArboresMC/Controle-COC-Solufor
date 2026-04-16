@@ -593,12 +593,16 @@ class DataManagementView(ManagerRequiredMixin, TemplateView):
     template_name = 'transactions/data_management.html'
 
     def get_context_data(self, **kwargs):
+        from django.core.paginator import Paginator
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         current_org = getattr(user, 'current_organization', None)
 
         participant_id = self.request.GET.get('participant')
         record_type = self.request.GET.get('type', 'entries')
+        date_from = self.request.GET.get('date_from', '')
+        date_to = self.request.GET.get('date_to', '')
+        page = self.request.GET.get('page', 1)
 
         participants = Participant.objects.filter(
             status='active', organization=current_org
@@ -606,26 +610,53 @@ class DataManagementView(ManagerRequiredMixin, TemplateView):
 
         selected_participant = participants.filter(pk=participant_id).first() if participant_id else None
 
-        records = []
+        records_qs = None
+        total_count = 0
         if selected_participant:
             if record_type == 'entries':
-                records = EntryRecord.objects.filter(
+                records_qs = EntryRecord.objects.filter(
                     participant=selected_participant
-                ).select_related('product', 'supplier').order_by('-movement_date', '-id')[:200]
+                ).select_related('product', 'supplier').order_by('-movement_date', '-id')
             elif record_type == 'sales':
-                records = SaleRecord.objects.filter(
+                records_qs = SaleRecord.objects.filter(
                     participant=selected_participant
-                ).select_related('product', 'customer').order_by('-movement_date', '-id')[:200]
+                ).select_related('product', 'customer').order_by('-movement_date', '-id')
             elif record_type == 'transformations':
-                records = TransformationRecord.objects.filter(
+                records_qs = TransformationRecord.objects.filter(
                     participant=selected_participant
-                ).select_related('source_product', 'target_product').order_by('-movement_date', '-id')[:200]
+                ).select_related('source_product', 'target_product').order_by('-movement_date', '-id')
+
+            if records_qs is not None:
+                if date_from:
+                    try:
+                        from datetime import datetime
+                        records_qs = records_qs.filter(movement_date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
+                    except ValueError:
+                        pass
+                if date_to:
+                    try:
+                        from datetime import datetime
+                        records_qs = records_qs.filter(movement_date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
+                    except ValueError:
+                        pass
+
+                total_count = records_qs.count()
+                paginator = Paginator(records_qs, 50)
+                records_page = paginator.get_page(page)
+            else:
+                records_page = None
+        else:
+            records_page = None
 
         ctx.update({
             'participants': participants,
             'selected_participant': selected_participant,
             'record_type': record_type,
-            'records': records,
+            'records': records_page,
+            'total_count': total_count,
+            'date_from': date_from,
+            'date_to': date_to,
+            'page_obj': records_page,
         })
         return ctx
 
