@@ -25,7 +25,7 @@
   <form method="get" id="filter-form" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
     <div>
       <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;">Participante</label>
-      <select name="participant" style="min-width:280px;" onchange="clearSelection();this.form.submit()">
+      <select name="participant" style="min-width:280px;">
         <option value="">— Selecione —</option>
         {% for p in participants %}
           <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
@@ -34,13 +34,12 @@
     </div>
     <div>
       <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;">Tipo</label>
-      <select name="type" style="min-width:160px;" onchange="clearSelection();this.form.submit()">
+      <select name="type" style="min-width:160px;">
         <option value="entries" {% if record_type == 'entries' %}selected{% endif %}>Entradas</option>
         <option value="sales" {% if record_type == 'sales' %}selected{% endif %}>Saídas</option>
         <option value="transformations" {% if record_type == 'transformations' %}selected{% endif %}>Transformações</option>
       </select>
     </div>
-    {% if selected_participant %}
     <div>
       <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;">Data início</label>
       <input type="date" name="date_from" value="{{ date_from }}" style="width:150px;">
@@ -50,12 +49,11 @@
       <input type="date" name="date_to" value="{{ date_to }}" style="width:150px;">
     </div>
     <div style="align-self:flex-end;">
-      <button type="submit" class="btn secondary" onclick="clearSelection()">Filtrar</button>
-      {% if date_from or date_to %}
-        <a href="?participant={{ selected_participant.id }}&type={{ record_type }}" class="btn secondary" style="margin-left:6px;" onclick="clearSelection()">Limpar</a>
+      <button type="submit" class="btn" onclick="clearSelection()">Filtrar</button>
+      {% if selected_participant and date_from or date_to %}
+        <a href="?participant={% if selected_participant %}{{ selected_participant.id }}{% endif %}&type={{ record_type }}" class="btn secondary" style="margin-left:6px;" onclick="clearSelection()">Limpar datas</a>
       {% endif %}
     </div>
-    {% endif %}
   </form>
 </div>
 
