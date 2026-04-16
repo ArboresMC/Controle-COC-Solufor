@@ -57,6 +57,39 @@ def _build_top_products(entries_qs, sales_qs):
     return items
 
 
+
+
+def _build_monthly_chart_data(entries_qs, sales_qs, transformations_qs, today):
+    """Retorna dados dos últimos 6 meses para os gráficos do dashboard."""
+    from datetime import date
+    meses_pt = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    months = []
+    for i in range(5, -1, -1):
+        # calcula o mês i meses atrás
+        m = today.month - i
+        y = today.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        months.append((y, m))
+
+    labels = [meses_pt[m - 1] for y, m in months]
+    entries_data = []
+    sales_data = []
+    transformations_data = []
+
+    for y, m in months:
+        entries_data.append(entries_qs.filter(movement_date__year=y, movement_date__month=m).count())
+        sales_data.append(sales_qs.filter(movement_date__year=y, movement_date__month=m).count())
+        transformations_data.append(transformations_qs.filter(movement_date__year=y, movement_date__month=m).count())
+
+    return {
+        'chart_labels': labels,
+        'chart_entries': entries_data,
+        'chart_sales': sales_data,
+        'chart_transformations': transformations_data,
+    }
+
 def _base_dashboard_context(user, today):
     current_org = getattr(user, 'current_organization', None)
     month_entries = EntryRecord.objects.select_related('participant', 'product')
@@ -141,6 +174,26 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             'transformation_share': int((transformations_count / movement_total) * 100) if movement_total else 0,
             'top_products': _build_top_products(month_entries, month_sales),
         }
+
+        # Dados dos últimos 6 meses para os gráficos
+        base_entries = EntryRecord.objects.all()
+        base_sales = SaleRecord.objects.all()
+        base_transformations = TransformationRecord.objects.all()
+        if user.is_manager or user.is_auditor:
+            if current_org:
+                base_entries = base_entries.filter(participant__organization=current_org)
+                base_sales = base_sales.filter(participant__organization=current_org)
+                base_transformations = base_transformations.filter(participant__organization=current_org)
+            else:
+                base_entries = EntryRecord.objects.none()
+                base_sales = SaleRecord.objects.none()
+                base_transformations = TransformationRecord.objects.none()
+        elif getattr(user, 'participant', None):
+            base_entries = base_entries.filter(participant=user.participant)
+            base_sales = base_sales.filter(participant=user.participant)
+            base_transformations = base_transformations.filter(participant=user.participant)
+        chart_data = _build_monthly_chart_data(base_entries, base_sales, base_transformations, today)
+        data.update(chart_data)
 
         # Totais históricos — desde o início, sem filtro de mês
         all_entries = EntryRecord.objects.select_related('participant', 'product')
