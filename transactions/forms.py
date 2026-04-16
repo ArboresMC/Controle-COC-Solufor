@@ -96,10 +96,13 @@ class EntryRecordForm(BaseMovementForm):
     def __init__(self, *args, **kwargs):
         participant = kwargs.pop('participant', None)
         super().__init__(*args, **kwargs)
+        self.fields['product'].label = 'Produto'
         self.fields['product'].queryset = Product.objects.filter(active=True).order_by('name')
+        self.fields['attachment'].label = 'Anexo'
         supplier_qs = Counterparty.objects.filter(type__in=['supplier', 'both'])
         if participant:
             supplier_qs = supplier_qs.filter(participant__in=[participant, None])
+        self.fields['supplier'].label = 'Fornecedor'
         self.fields['supplier'].queryset = supplier_qs.order_by('name')
         self.fields['supplier'].required = False
         self.fields['supplier'].help_text = 'Selecione o fornecedor da entrada. Em branco, o sistema usará “Não informado”.'
@@ -140,12 +143,16 @@ class SaleRecordForm(BaseMovementForm):
         qs = Counterparty.objects.filter(type__in=['customer', 'both'])
         if participant:
             qs = qs.filter(participant__in=[participant, None])
+        self.fields['customer'].label = 'Cliente'
         self.fields['customer'].queryset = qs.order_by('name')
         supplier_qs = Counterparty.objects.filter(type__in=['supplier', 'both'])
         if participant:
             supplier_qs = supplier_qs.filter(participant__in=[participant, None])
+        self.fields['supplier'].label = 'Fornecedor de origem'
         self.fields['supplier'].queryset = supplier_qs.order_by('name')
+        self.fields['product'].label = 'Produto'
         self.fields['product'].queryset = Product.objects.filter(active=True).order_by('name')
+        self.fields['attachment'].label = 'Anexo'
         self.fields['new_customer_name'].help_text = 'Se informado, cria um novo cliente para este participante.'
         self.fields['source_lot'].help_text = 'Opcional: selecione um lote específico para vincular a venda a uma compra ou transformação determinada. Em branco, o sistema usa FIFO automático.'
         self.fields['supplier'].help_text = 'O fornecedor é herdado automaticamente do lote de origem e não pode ser alterado na saída.'
@@ -278,8 +285,11 @@ class TransformationRecordForm(forms.ModelForm):
         if participant:
             customer_qs = customer_qs.filter(participant__in=[participant, None])
             supplier_qs = supplier_qs.filter(participant__in=[participant, None])
+        self.fields['customer'].label = 'Cliente final'
         self.fields['customer'].queryset = customer_qs.order_by('name')
         self.fields['supplier'].queryset = supplier_qs.order_by('name')
+        self.fields['attachment'].label = 'Anexo'
+        self.fields['target_product'].label = 'Produto destino'
 
         self.fields['new_customer_name'].help_text = 'Se informado, cria um novo cliente final para este participante.'
         self.fields['target_quantity'].help_text = 'Informe a quantidade produzida no produto destino. O sistema calculará automaticamente o consumo da tora pela regra de rendimento.'
