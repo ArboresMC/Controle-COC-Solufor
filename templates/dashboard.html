@@ -270,15 +270,15 @@
     <div class="card-header">
       <div>
         <div class="kicker">Aprovações</div>
-        <h2 class="card-title">Lançamentos aguardando aprovação</h2>
-        <p class="card-subtitle">Registros importados pelos participantes que precisam de OK do gestor.</p>
+        <h2 class="card-title">Fechamentos aguardando aprovação</h2>
+        <p class="card-subtitle">Fechamentos mensais enviados pelos participantes que aguardam revisão do gestor.</p>
       </div>
-      <a class="btn {% if not pending_submissions_count %}secondary{% endif %}" href="{% url 'manager_review_dashboard' %}">
-        {% if pending_submissions_count %}Ver e aprovar ({{ pending_submissions_count }}){% else %}Ver aprovações{% endif %}
+      <a class="btn {% if not pending_closings_count %}secondary{% endif %}" href="{% url 'manager_closing_dashboard' %}">
+        {% if pending_closings_count %}Ver e aprovar ({{ pending_closings_count }}){% else %}Ver fechamentos{% endif %}
       </a>
     </div>
-    {% if not pending_submissions_count %}
-    <div class="empty-state" style="padding:12px 0;">Nenhum lançamento pendente de aprovação.</div>
+    {% if not pending_closings_count %}
+    <div class="empty-state" style="padding:12px 0;">Nenhum fechamento pendente de aprovação.</div>
     {% endif %}
   </div>
   <div class="card soft">
