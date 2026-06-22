@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('manejo', '0002_bootstrap_propriedades_fm'),
+    ('manejo', '0001_initial'),
     ]
 
     operations = [
