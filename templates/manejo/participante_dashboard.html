@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block hero_title %}Manejo Florestal — Detalhe do participante{% endblock %}
+{% block hero_text %}Controle de inventário certificado por propriedade e espécie, com saldo disponível para extração.{% endblock %}
+{% block content %}
+
+{% if messages %}
+  {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }}" style="padding:14px 16px;border-radius:12px;margin-bottom:14px;
+      background:{% if 'success' in msg.tags %}var(--success-soft){% elif 'error' in msg.tags %}var(--danger-soft){% else %}var(--warning-soft){% endif %};
+      color:{% if 'success' in msg.tags %}var(--success){% elif 'error' in msg.tags %}var(--danger){% else %}var(--warning){% endif %};">
+      {{ msg }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+{% if user.is_manager or user.is_auditor %}
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Filtrar</div>
+      <h2 class="card-title">Selecione o participante de Manejo</h2>
+    </div>
+    <a class="btn secondary" href="{% url 'manejo_dashboard' %}">← Voltar ao painel agregado</a>
+  </div>
+  <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <select name="participant" style="min-width:280px;">
+      <option value="">— Selecione —</option>
+      {% for p in participants %}
+        <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Filtrar</button>
+  </form>
+</div>
+{% endif %}
+
+{% if require_filter %}
+  <div class="card"><div class="empty-state">Selecione um participante de Manejo acima para ver o detalhe.</div></div>
+{% else %}
+
+<div class="grid metrics">
+  <div class="card metric-card"><div class="metric-label">Propriedades ativas</div><div class="metric-value">{{ total_propriedades }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Espécies cadastradas</div><div class="metric-value">{{ total_especies }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Volume inventariado</div><div class="metric-value">{{ total_inicial|floatformat:2 }}</div><div class="metric-foot">m³ total</div></div>
+  <div class="card metric-card"><div class="metric-label">Saldo disponível</div><div class="metric-value">{{ total_saldo|floatformat:2 }}</div><div class="metric-foot">m³ restante</div></div>
+</div>
+
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Inventário</div>
+      <h2 class="card-title">Saldo por propriedade e espécie</h2>
+      <p class="card-subtitle">Volume inicial, vendido e disponível por combinação de propriedade + espécie.</p>
+    </div>
+    <a class="btn secondary" href="{% url 'manejo_entrada_create' %}{% if selected_participant %}?participant={{ selected_participant.id }}{% endif %}">Nova entrada</a>
+  </div>
+  {% if saldo_rows %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Propriedade</th><th>Espécie</th><th>Volume inicial (m³)</th><th>Vendido (m³)</th><th>Saldo (m³)</th></tr>
+      {% for row in saldo_rows %}
+      <tr>
+        <td><strong>{{ row.propriedade }}</strong></td>
+        <td>{{ row.especie }}</td>
+        <td>{{ row.volume_inicial|floatformat:4 }}</td>
+        <td>{{ row.volume_vendido|floatformat:4 }}</td>
+        <td><span class="balance {% if row.saldo <= 0 %}danger{% else %}success{% endif %}">{{ row.saldo|floatformat:4 }}</span></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma entrada de inventário registrada ainda.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Saídas recentes</h2>
+      <p class="card-subtitle">Últimas vendas/extrações registradas (não inclui ajustes históricos de importação).</p>
+    </div>
+    <a class="btn" href="{% url 'manejo_saida_create' %}{% if selected_participant %}?participant={{ selected_participant.id }}{% endif %}">Nova saída</a>
+  </div>
+  {% if recent_saidas %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Data</th><th>Propriedade</th><th>Espécie</th><th>Nº NF</th><th>Cliente</th><th>Volume (m³)</th><th>FSC</th></tr>
+      {% for s in recent_saidas %}
+      <tr>
+        <td>{{ s.data|date:"d/m/Y" }}</td>
+        <td>{{ s.entrada.propriedade.nome }}</td>
+        <td>{{ s.entrada.especie.nome }}</td>
+        <td>{{ s.documento }}</td>
+        <td>{{ s.cliente_nome }}</td>
+        <td>{{ s.volume_m3|floatformat:4 }}</td>
+        <td>{% if s.declaracao_fsc %}<span class="badge success">Sim</span>{% else %}<span class="badge neutral">Não</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma saída registrada ainda.</div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

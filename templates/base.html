@@ -327,6 +327,7 @@ input[type='checkbox'] { width: auto; }
           <div class="sidebar-label">Manejo Florestal</div>
           <nav class="sidebar-nav">
             <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon">📊</span><span class="sidebar-link-text">Painel Manejo</span></a>
+            <a class="sidebar-link {% if '/manejo/participante/' in request.path %}is-active{% endif %}" href="/manejo/participante/"><span class="sidebar-icon">🔎</span><span class="sidebar-link-text">Ver por participante</span></a>
             <a class="sidebar-link {% if '/manejo/propriedades/' in request.path %}is-active{% endif %}" href="/manejo/propriedades/"><span class="sidebar-icon">🏞️</span><span class="sidebar-link-text">Propriedades</span></a>
             <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon">🌳</span><span class="sidebar-link-text">Espécies</span></a>
           </nav>

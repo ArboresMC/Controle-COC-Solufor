@@ -346,7 +346,8 @@ def get_manager_alerts(*, today=None, organization=None):
     from participants.models import Participant
     from .models import EntryRecord, SaleRecord
     today = today or date.today(); alerts = []
-    active_participants = Participant.objects.filter(status='active')
+    # Apenas participantes de Cadeia de Custódia — Manejo Florestal tem seu próprio painel
+    active_participants = Participant.objects.filter(status='active', ativo_coc=True)
     active_participants = active_participants.filter(organization=organization) if organization else Participant.objects.none()
     closings = MonthlyClosing.objects.filter(year=today.year, month=today.month)
     closings = closings.filter(participant__organization=organization) if organization else MonthlyClosing.objects.none()

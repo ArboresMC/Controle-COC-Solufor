@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block hero_title %}Manejo Florestal{% endblock %}
-{% block hero_text %}Controle de inventário certificado por propriedade e espécie, com saldo disponível para extração.{% endblock %}
+{% block hero_text %}
+{% if is_aggregate %}Visão consolidada de todos os membros do programa de Manejo Florestal.{% else %}Controle de inventário certificado por propriedade e espécie, com saldo disponível para extração.{% endif %}
+{% endblock %}
 {% block content %}
 
 {% if messages %}
@@ -13,28 +15,107 @@
   {% endfor %}
 {% endif %}
 
-{% if user.is_manager or user.is_auditor %}
-<div class="card" style="margin-bottom:18px;">
-  <div class="card-header">
-    <div>
-      <div class="kicker">Filtrar</div>
-      <h2 class="card-title">Selecione o participante de Manejo</h2>
+{% if require_filter %}
+  <div class="card"><div class="empty-state">Seu cadastro ainda não tem propriedades de Manejo Florestal vinculadas.</div></div>
+{% elif is_aggregate %}
+
+<div class="grid metrics">
+  <div class="card metric-card"><div class="metric-label">Membros FM ativos</div><div class="metric-value">{{ total_membros }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Propriedades ativas</div><div class="metric-value">{{ total_propriedades }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Volume inventariado</div><div class="metric-value">{{ total_volume|floatformat:0 }}</div><div class="metric-foot">m³ total do grupo</div></div>
+  <div class="card metric-card"><div class="metric-label">Saldo disponível</div><div class="metric-value">{{ total_saldo|floatformat:0 }}</div><div class="metric-foot">m³ restante no grupo</div></div>
+</div>
+
+<div class="dashboard-grid-2" style="display:grid;grid-template-columns:1.2fr .8fr;gap:18px;">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Últimos 6 meses</div>
+        <h2 class="card-title">Movimentações de Manejo</h2>
+        <p class="card-subtitle">Entradas de inventário e saídas registradas pelo grupo (exclui ajustes históricos).</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:2px;background:#1d9e75;display:inline-block"></span>Entradas</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:2px;background:#d85a30;display:inline-block"></span>Saídas</span>
+    </div>
+    <div style="position:relative;width:100%;height:220px;">
+      <canvas id="fmChartBars" role="img" aria-label="Gráfico de barras com entradas e saídas de Manejo dos últimos 6 meses"></canvas>
     </div>
   </div>
-  <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-    <select name="participant" style="min-width:280px;">
-      <option value="">— Selecione —</option>
-      {% for p in participants %}
-        <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
-      {% endfor %}
-    </select>
-    <button type="submit" class="btn">Filtrar</button>
-  </form>
-</div>
-{% endif %}
 
-{% if require_filter %}
-  <div class="card"><div class="empty-state">Selecione um participante de Manejo acima para ver o painel.</div></div>
+  <div class="card soft">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Atalhos</div>
+        <h2 class="card-title">Ações rápidas</h2>
+      </div>
+    </div>
+    <div class="quick-actions" style="display:flex;flex-wrap:wrap;gap:10px;">
+      <a class="btn" href="{% url 'manejo_participante_dashboard' %}">Ver por participante</a>
+      <a class="btn secondary" href="{% url 'manejo_propriedade_list' %}">Propriedades</a>
+      <a class="btn secondary" href="{% url 'manejo_especie_list' %}">Espécies</a>
+      <a class="btn secondary" href="{% url 'manejo_entrada_list' %}">Entradas</a>
+      <a class="btn secondary" href="{% url 'manejo_saida_list' %}">Saídas</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Saldo por membro</h2>
+      <p class="card-subtitle">Resumo de propriedades, volume e saldo disponível de cada membro do programa.</p>
+    </div>
+  </div>
+  {% if membro_rows %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Membro</th><th>Propriedades</th><th>Volume inicial (m³)</th><th>Saldo disponível (m³)</th><th>Ação</th></tr>
+      {% for row in membro_rows %}
+      <tr>
+        <td><strong>{{ row.nome }}</strong></td>
+        <td>{{ row.propriedades_count }}</td>
+        <td>{{ row.volume|floatformat:2 }}</td>
+        <td><span class="balance {% if row.saldo <= 0 %}danger{% else %}success{% endif %}">{{ row.saldo|floatformat:2 }}</span></td>
+        <td><a class="inline-link" href="{% url 'manejo_participante_dashboard' %}?participant={{ row.participant_id }}">Ver detalhe</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma entrada de inventário registrada ainda no grupo.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Saídas recentes do grupo</h2>
+      <p class="card-subtitle">Últimas vendas/extrações registradas por qualquer membro FM (exclui ajustes históricos).</p>
+    </div>
+  </div>
+  {% if recent_saidas %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Data</th><th>Membro</th><th>Propriedade</th><th>Espécie</th><th>Nº NF</th><th>Volume (m³)</th></tr>
+      {% for s in recent_saidas %}
+      <tr>
+        <td>{{ s.data|date:"d/m/Y" }}</td>
+        <td>{{ s.participant }}</td>
+        <td>{{ s.entrada.propriedade.nome }}</td>
+        <td>{{ s.entrada.especie.nome }}</td>
+        <td>{{ s.documento }}</td>
+        <td>{{ s.volume_m3|floatformat:4 }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma saída registrada ainda no grupo.</div>
+  {% endif %}
+</div>
+
 {% else %}
 
 <div class="grid metrics">
@@ -44,14 +125,45 @@
   <div class="card metric-card"><div class="metric-label">Saldo disponível</div><div class="metric-value">{{ total_saldo|floatformat:2 }}</div><div class="metric-foot">m³ restante</div></div>
 </div>
 
+<div class="dashboard-grid-2" style="display:grid;grid-template-columns:1.2fr .8fr;gap:18px;">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Últimos 6 meses</div>
+        <h2 class="card-title">Movimentações</h2>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:2px;background:#1d9e75;display:inline-block"></span>Entradas</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:2px;background:#d85a30;display:inline-block"></span>Saídas</span>
+    </div>
+    <div style="position:relative;width:100%;height:200px;">
+      <canvas id="fmChartBars" role="img" aria-label="Gráfico de barras com entradas e saídas dos últimos 6 meses"></canvas>
+    </div>
+  </div>
+
+  <div class="card soft">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Atalhos</div>
+        <h2 class="card-title">Ações rápidas</h2>
+      </div>
+    </div>
+    <div class="quick-actions" style="display:flex;flex-wrap:wrap;gap:10px;">
+      <a class="btn" href="{% url 'manejo_entrada_create' %}">Nova entrada</a>
+      <a class="btn" href="{% url 'manejo_saida_create' %}">Nova saída</a>
+      <a class="btn secondary" href="{% url 'manejo_propriedade_list' %}">Propriedades</a>
+      <a class="btn secondary" href="{% url 'manejo_especie_list' %}">Espécies</a>
+    </div>
+  </div>
+</div>
+
 <div class="card" style="margin-bottom:18px;">
   <div class="card-header">
     <div>
       <div class="kicker">Inventário</div>
       <h2 class="card-title">Saldo por propriedade e espécie</h2>
-      <p class="card-subtitle">Volume inicial, vendido e disponível por combinação de propriedade + espécie.</p>
     </div>
-    <a class="btn secondary" href="{% url 'manejo_entrada_create' %}{% if selected_participant %}?participant={{ selected_participant.id }}{% endif %}">Nova entrada</a>
   </div>
   {% if saldo_rows %}
   <div class="table-wrap compact-table">
@@ -63,7 +175,7 @@
         <td>{{ row.especie }}</td>
         <td>{{ row.volume_inicial|floatformat:4 }}</td>
         <td>{{ row.volume_vendido|floatformat:4 }}</td>
-        <td><span class="balance {% if row.saldo <= 0 %}danger{% elif row.saldo < row.volume_inicial|default:0|floatformat:0 %}neutral{% else %}success{% endif %}">{{ row.saldo|floatformat:4 }}</span></td>
+        <td><span class="balance {% if row.saldo <= 0 %}danger{% else %}success{% endif %}">{{ row.saldo|floatformat:4 }}</span></td>
       </tr>
       {% endfor %}
     </table>
@@ -77,9 +189,7 @@
   <div class="card-header">
     <div>
       <h2 class="card-title">Saídas recentes</h2>
-      <p class="card-subtitle">Últimas vendas/extrações registradas.</p>
     </div>
-    <a class="btn" href="{% url 'manejo_saida_create' %}{% if selected_participant %}?participant={{ selected_participant.id }}{% endif %}">Nova saída</a>
   </div>
   {% if recent_saidas %}
   <div class="table-wrap compact-table">
@@ -102,5 +212,39 @@
   <div class="empty-state">Nenhuma saída registrada ainda.</div>
   {% endif %}
 </div>
+
 {% endif %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function() {
+  var labels = {{ fm_chart_labels|safe }};
+  var entradas = {{ fm_chart_entradas|safe }};
+  var saidas = {{ fm_chart_saidas|safe }};
+  var gridColor = 'rgba(0,0,0,0.06)';
+  var textColor = 'rgba(0,0,0,0.45)';
+
+  var ctx = document.getElementById('fmChartBars');
+  if (ctx) {
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Entradas', data: entradas, backgroundColor: '#1d9e75', borderRadius: 3 },
+          { label: 'Saídas', data: saidas, backgroundColor: '#d85a30', borderRadius: 3 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } }, beginAtZero: true }
+        }
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

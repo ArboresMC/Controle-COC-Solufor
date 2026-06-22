@@ -227,7 +227,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         })
 
         if user.is_manager:
-            active_participants = Participant.objects.filter(status='active')
+            # Apenas participantes de Cadeia de Custódia neste painel — Manejo tem painel próprio
+            active_participants = Participant.objects.filter(status='active', ativo_coc=True)
             active_participants = active_participants.filter(organization=current_org) if current_org else Participant.objects.none()
             closings_qs = MonthlyClosing.objects.filter(year=today.year, month=today.month)
             closings_qs = closings_qs.filter(participant__organization=current_org) if current_org else MonthlyClosing.objects.none()

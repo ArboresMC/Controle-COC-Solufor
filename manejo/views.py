@@ -1,6 +1,8 @@
+from datetime import date
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView
@@ -33,8 +35,158 @@ class FMAccessMixin(LoginRequiredMixin):
         return getattr(user, 'participant', None)
 
 
+def _build_participant_context(participant):
+    """Monta o contexto de saldo/inventário de UM participante FM. Usado tanto
+    pelo painel direto do participante quanto pelo drill-in do gestor."""
+    entradas = InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie')
+    saldo_rows = []
+    total_inicial = Decimal('0')
+    total_saldo = Decimal('0')
+    for entrada in entradas:
+        saldo = entrada.saldo_disponivel_m3
+        total_inicial += entrada.volume_m3
+        total_saldo += saldo
+        saldo_rows.append({
+            'entrada': entrada,
+            'propriedade': entrada.propriedade.nome,
+            'especie': entrada.especie.nome,
+            'volume_inicial': entrada.volume_m3,
+            'volume_vendido': entrada.volume_vendido_m3,
+            'saldo': saldo,
+        })
+
+    recent_saidas = SaidaManejo.objects.filter(participant=participant).exclude(
+        documento='AJUSTE-HISTORICO'
+    ).select_related('entrada__propriedade', 'entrada__especie').order_by('-data', '-id')[:10]
+
+    return {
+        'saldo_rows': saldo_rows,
+        'total_inicial': total_inicial,
+        'total_saldo': total_saldo,
+        'total_propriedades': Propriedade.objects.filter(participant=participant, ativa=True).count(),
+        'total_especies': Especie.objects.filter(participant=participant, ativo=True).count(),
+        'recent_saidas': recent_saidas,
+    }
+
+
+def _build_chart_data(membros_qs, today):
+    """Gráfico dos últimos 6 meses: entradas de inventário e saídas reais
+    (exclui ajustes históricos) agregadas entre os membros informados."""
+    meses_pt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    months = []
+    for i in range(5, -1, -1):
+        m = today.month - i
+        y = today.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        months.append((y, m))
+
+    labels = [meses_pt[m - 1] for y, m in months]
+    entradas_data, saidas_data = [], []
+    for y, m in months:
+        entradas_data.append(
+            InventarioEntrada.objects.filter(participant__in=membros_qs, data__year=y, data__month=m).count()
+        )
+        saidas_data.append(
+            SaidaManejo.objects.filter(participant__in=membros_qs, data__year=y, data__month=m)
+            .exclude(documento='AJUSTE-HISTORICO').count()
+        )
+
+    return {
+        'fm_chart_labels': labels,
+        'fm_chart_entradas': entradas_data,
+        'fm_chart_saidas': saidas_data,
+    }
+
+
 class ManejoDashboardView(FMAccessMixin, TemplateView):
+    """Painel principal de Manejo Florestal.
+    Gestor/auditor: visão agregada de TODOS os membros FM.
+    Participante: visão direta dos seus próprios dados (sem agregação)."""
     template_name = 'manejo/dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        if user.is_manager or user.is_auditor:
+            from participants.models import Participant
+            current_org = getattr(user, 'current_organization', None)
+            membros_fm = Participant.objects.filter(ativo_fm=True, status='active')
+            membros_fm = membros_fm.filter(organization=current_org) if current_org else Participant.objects.none()
+
+            propriedades = Propriedade.objects.filter(participant__in=membros_fm, ativa=True)
+            entradas = InventarioEntrada.objects.filter(participant__in=membros_fm).select_related(
+                'propriedade', 'especie', 'participant'
+            )
+
+            total_volume = Decimal('0')
+            total_saldo = Decimal('0')
+            por_membro = {}
+            for entrada in entradas:
+                saldo = entrada.saldo_disponivel_m3
+                total_volume += entrada.volume_m3
+                total_saldo += saldo
+                pid = entrada.participant_id
+                if pid not in por_membro:
+                    por_membro[pid] = {
+                        'nome': str(entrada.participant),
+                        'volume': Decimal('0'),
+                        'saldo': Decimal('0'),
+                        'propriedades': set(),
+                    }
+                por_membro[pid]['volume'] += entrada.volume_m3
+                por_membro[pid]['saldo'] += saldo
+                por_membro[pid]['propriedades'].add(entrada.propriedade_id)
+
+            membro_rows = sorted(
+                [
+                    {
+                        'participant_id': pid,
+                        'nome': info['nome'],
+                        'propriedades_count': len(info['propriedades']),
+                        'volume': info['volume'],
+                        'saldo': info['saldo'],
+                    }
+                    for pid, info in por_membro.items()
+                ],
+                key=lambda r: r['nome']
+            )
+
+            recent_saidas = SaidaManejo.objects.filter(participant__in=membros_fm).exclude(
+                documento='AJUSTE-HISTORICO'
+            ).select_related('entrada__propriedade', 'entrada__especie', 'participant').order_by('-data', '-id')[:10]
+
+            ctx.update({
+                'is_aggregate': True,
+                'total_membros': membros_fm.count(),
+                'total_propriedades': propriedades.count(),
+                'total_volume': total_volume,
+                'total_saldo': total_saldo,
+                'membro_rows': membro_rows,
+                'recent_saidas': recent_saidas,
+            })
+            ctx.update(_build_chart_data(membros_fm, date.today()))
+            return ctx
+
+        # Participante: mostra direto os próprios dados, sem agregação
+        participant = getattr(user, 'participant', None)
+        ctx['is_aggregate'] = False
+        if not participant or not participant.ativo_fm:
+            ctx['require_filter'] = True
+            return ctx
+        ctx.update(_build_participant_context(participant))
+        ctx.update(_build_chart_data(
+            type(participant).objects.filter(pk=participant.pk), date.today()
+        ))
+        return ctx
+
+
+class ManejoParticipantDashboardView(FMAccessMixin, TemplateView):
+    """Visão detalhada de UM participante FM específico — usada pelo gestor
+    para 'entrar' em um membro a partir do painel agregado."""
+    template_name = 'manejo/participante_dashboard.html'
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -51,35 +203,7 @@ class ManejoDashboardView(FMAccessMixin, TemplateView):
         else:
             participant = self.get_participant()
 
-        entradas = InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie')
-        saldo_rows = []
-        total_inicial = 0
-        total_saldo = 0
-        for entrada in entradas:
-            saldo = entrada.saldo_disponivel_m3
-            total_inicial += entrada.volume_m3
-            total_saldo += saldo
-            saldo_rows.append({
-                'entrada': entrada,
-                'propriedade': entrada.propriedade.nome,
-                'especie': entrada.especie.nome,
-                'volume_inicial': entrada.volume_m3,
-                'volume_vendido': entrada.volume_vendido_m3,
-                'saldo': saldo,
-            })
-
-        recent_saidas = SaidaManejo.objects.filter(participant=participant).select_related(
-            'entrada__propriedade', 'entrada__especie'
-        ).order_by('-data', '-id')[:10]
-
-        ctx.update({
-            'saldo_rows': saldo_rows,
-            'total_inicial': total_inicial,
-            'total_saldo': total_saldo,
-            'total_propriedades': Propriedade.objects.filter(participant=participant, ativa=True).count(),
-            'total_especies': Especie.objects.filter(participant=participant, ativo=True).count(),
-            'recent_saidas': recent_saidas,
-        })
+        ctx.update(_build_participant_context(participant))
         return ctx
 
 
@@ -216,10 +340,6 @@ class InventarioEntradaCreateView(FMAccessMixin, CreateView):
     def form_valid(self, form):
         messages.success(self.request, 'Entrada de inventário registrada com sucesso.')
         return super().form_valid(form)
-
-    def dispatch(self, request, *args, **kwargs):
-        response = super().dispatch(request, *args, **kwargs)
-        return response
 
 
 # --- Saídas ---

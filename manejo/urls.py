@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path('', views.ManejoDashboardView.as_view(), name='manejo_dashboard'),
+    path('participante/', views.ManejoParticipantDashboardView.as_view(), name='manejo_participante_dashboard'),
 
     path('especies/', views.EspecieListView.as_view(), name='manejo_especie_list'),
     path('especies/nova/', views.EspecieCreateView.as_view(), name='manejo_especie_create'),
