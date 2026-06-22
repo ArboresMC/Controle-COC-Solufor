@@ -331,6 +331,12 @@ input[type='checkbox'] { width: auto; }
             <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon">🌳</span><span class="sidebar-link-text">Espécies</span></a>
           </nav>
         </div>
+        <div class="sidebar-section">
+          <div class="sidebar-label">Financeiro</div>
+          <nav class="sidebar-nav">
+            <a class="sidebar-link {% if '/transactions/gestor/faturamento/' in request.path %}is-active{% endif %}" href="/transactions/gestor/faturamento/"><span class="sidebar-icon">💰</span><span class="sidebar-link-text">Faturamento</span></a>
+          </nav>
+        </div>
         {% endif %}
       </div>
       <div class="sidebar-footer">

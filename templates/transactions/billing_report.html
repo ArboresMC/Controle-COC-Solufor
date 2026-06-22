@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block hero_title %}Faturamento sugerido{% endblock %}
+{% block hero_text %}Régua de cobrança baseada em propriedades (Manejo Florestal) e movimentações mensais (Cadeia de Custódia).{% endblock %}
+{% block content %}
+
+<div class="card soft" style="margin-bottom:18px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Faixas configuradas</div>
+      <h2 class="card-title">Como o valor é calculado</h2>
+    </div>
+  </div>
+  <div class="dashboard-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+    <div class="info-box">
+      <strong>Cadeia de Custódia (por movimentações/mês)</strong>
+      <div class="stack" style="margin-top:8px;">
+        {% for limite, valor in faixas_coc %}
+        <div class="summary-pill">
+          <strong>{% if limite %}Até {{ limite }}{% else %}Acima do limite anterior{% endif %}</strong>
+          <span>R$ {{ valor }}/mês</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="info-box">
+      <strong>Manejo Florestal (por propriedades ativas)</strong>
+      <div class="stack" style="margin-top:8px;">
+        {% for limite, valor in faixas_fm %}
+        <div class="summary-pill">
+          <strong>{% if limite %}Até {{ limite }}{% else %}Acima do limite anterior{% endif %}</strong>
+          <span>R$ {{ valor }}/mês</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Competência {{ competencia|date:"m/Y" }}</div>
+      <h2 class="card-title">Régua de cobrança por participante</h2>
+      <p class="card-subtitle">Valores sugeridos com base no uso real de cada participante neste mês.</p>
+    </div>
+    <span class="badge success">Total sugerido: R$ {{ total_mensalidade }}/mês</span>
+  </div>
+
+  {% if rows %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr>
+        <th>Participante</th>
+        <th>Módulos</th>
+        <th>Detalhe de uso</th>
+        <th>CoC</th>
+        <th>FM</th>
+        <th>Total/mês</th>
+      </tr>
+      {% for row in rows %}
+      <tr>
+        <td><strong>{{ row.participant }}</strong></td>
+        <td>
+          {% if row.ativo_coc %}<span class="badge neutral">CoC</span>{% endif %}
+          {% if row.ativo_fm %}<span class="badge success">FM</span>{% endif %}
+        </td>
+        <td class="muted">{{ row.detalhe }}</td>
+        <td>{% if row.valor_coc %}R$ {{ row.valor_coc }}{% else %}—{% endif %}</td>
+        <td>{% if row.valor_fm %}R$ {{ row.valor_fm }}{% else %}—{% endif %}</td>
+        <td><strong>R$ {{ row.valor_total }}</strong></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhum participante ativo encontrado.</div>
+  {% endif %}
+</div>
+{% endblock %}

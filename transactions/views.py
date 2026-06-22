@@ -342,13 +342,13 @@ class DocumentCenterView(LoginRequiredMixin, TemplateView):
         return ctx
 
 class EntryListView(ParticipantScopedMixin, ListView):
-    model = EntryRecord; template_name = 'transactions/entry_list.html'; context_object_name = 'records'; paginate_by = 50
+    model = EntryRecord; template_name = 'transactions/entry_list.html'; context_object_name = 'records'; paginate_by = 25
 
 class SaleListView(ParticipantScopedMixin, ListView):
-    model = SaleRecord; template_name = 'transactions/sale_list.html'; context_object_name = 'records'; paginate_by = 50
+    model = SaleRecord; template_name = 'transactions/sale_list.html'; context_object_name = 'records'; paginate_by = 25
 
 class TransformationListView(LoginRequiredMixin, ListView):
-    model = TransformationRecord; template_name = 'transactions/transformation_list.html'; context_object_name = 'records'
+    model = TransformationRecord; template_name = 'transactions/transformation_list.html'; context_object_name = 'records'; paginate_by = 25
     def get_queryset(self):
         qs = TransformationRecord.objects.select_related('participant', 'source_product', 'target_product', 'customer', 'supplier')
         user = self.request.user; current_org = getattr(user, 'current_organization', None)
@@ -731,3 +731,77 @@ class DataDeleteSingleView(ManagerRequiredMixin, View):
             messages.success(request, 'Transformação excluída com sucesso.')
 
         return redirect(f'/transactions/gestor/dados/?participant={participant_id}&type={record_type}')
+
+
+# =============================================================================
+# RELATÓRIO DE FATURAMENTO — Gestor
+# =============================================================================
+
+class BillingReportView(ManagerRequiredMixin, TemplateView):
+    template_name = 'transactions/billing_report.html'
+
+    # (limite_maximo_ou_None, valor_mensal)
+    FAIXAS_FM = [(3, 25), (10, 60), (20, 110), (None, 180)]
+    FAIXAS_COC = [(20, 30), (50, 70), (None, 120)]
+
+    def _valor_por_faixa(self, count, faixas):
+        for limite, valor in faixas:
+            if limite is None or count <= limite:
+                return valor
+        return faixas[-1][1]
+
+    def get_context_data(self, **kwargs):
+        from manejo.models import Propriedade
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        current_org = getattr(user, 'current_organization', None)
+        today = date.today()
+
+        participants = Participant.objects.filter(status='active')
+        participants = participants.filter(organization=current_org) if current_org else Participant.objects.none()
+
+        rows = []
+        total_mensalidade = 0
+        for p in participants.order_by('trade_name', 'legal_name'):
+            valor_coc = 0
+            valor_fm = 0
+            detalhe_partes = []
+
+            if p.ativo_coc:
+                mov_count = (
+                    EntryRecord.objects.filter(
+                        participant=p, movement_date__year=today.year, movement_date__month=today.month
+                    ).count()
+                    + SaleRecord.objects.filter(
+                        participant=p, movement_date__year=today.year, movement_date__month=today.month
+                    ).count()
+                )
+                valor_coc = self._valor_por_faixa(mov_count, self.FAIXAS_COC)
+                detalhe_partes.append(f"CoC: {mov_count} mov./mês")
+
+            if p.ativo_fm:
+                prop_count = Propriedade.objects.filter(participant=p, ativa=True).count()
+                valor_fm = self._valor_por_faixa(prop_count, self.FAIXAS_FM)
+                detalhe_partes.append(f"FM: {prop_count} propriedade(s)")
+
+            valor_total = valor_coc + valor_fm
+            total_mensalidade += valor_total
+
+            rows.append({
+                'participant': p,
+                'ativo_coc': p.ativo_coc,
+                'ativo_fm': p.ativo_fm,
+                'valor_coc': valor_coc,
+                'valor_fm': valor_fm,
+                'valor_total': valor_total,
+                'detalhe': ' · '.join(detalhe_partes) if detalhe_partes else 'Sem módulo ativo',
+            })
+
+        ctx.update({
+            'rows': rows,
+            'total_mensalidade': total_mensalidade,
+            'faixas_fm': self.FAIXAS_FM,
+            'faixas_coc': self.FAIXAS_COC,
+            'competencia': today,
+        })
+        return ctx

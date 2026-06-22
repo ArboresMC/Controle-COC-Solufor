@@ -5,6 +5,7 @@ from .views import (
     TransformationCreateView, TransformationListView, TransformationUpdateView,
     DocumentCenterView,
     DataManagementView, DataDeleteView, DataDeleteSingleView,
+    BillingReportView,
 )
 
 urlpatterns = [
@@ -21,4 +22,5 @@ urlpatterns = [
     path('gestor/dados/', DataManagementView.as_view(), name='data_management'),
     path('gestor/dados/excluir/', DataDeleteView.as_view(), name='data_delete'),
     path('gestor/dados/excluir/unico/', DataDeleteSingleView.as_view(), name='data_delete_single'),
+    path('gestor/faturamento/', BillingReportView.as_view(), name='billing_report'),
 ]

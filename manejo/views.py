@@ -184,6 +184,7 @@ class PropriedadeUpdateView(FMAccessMixin, UpdateView):
 class InventarioEntradaListView(FMAccessMixin, ListView):
     template_name = 'manejo/entrada_list.html'
     context_object_name = 'entradas'
+    paginate_by = 25
 
     def get_queryset(self):
         participant = self.get_participant()
@@ -226,6 +227,7 @@ class InventarioEntradaCreateView(FMAccessMixin, CreateView):
 class SaidaManejoListView(FMAccessMixin, ListView):
     template_name = 'manejo/saida_list.html'
     context_object_name = 'saidas'
+    paginate_by = 25
 
     def get_queryset(self):
         participant = self.get_participant()

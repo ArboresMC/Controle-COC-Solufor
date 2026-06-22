@@ -46,6 +46,17 @@
       {% endfor %}
     </table>
   </div>
+  {% if is_paginated %}
+  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;align-items:center;">
+    {% if page_obj.has_previous %}
+      <a href="?participant={{ selected_participant.id }}&page={{ page_obj.previous_page_number }}" class="btn secondary" style="font-size:13px;min-height:36px;">← Anterior</a>
+    {% endif %}
+    <span style="font-size:13px;color:var(--muted);padding:0 8px;">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?participant={{ selected_participant.id }}&page={{ page_obj.next_page_number }}" class="btn secondary" style="font-size:13px;min-height:36px;">Próxima →</a>
+    {% endif %}
+  </div>
+  {% endif %}
   {% else %}
   <div class="empty-state">Nenhuma saída registrada ainda.</div>
   {% endif %}
