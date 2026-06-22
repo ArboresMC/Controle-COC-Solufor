@@ -95,6 +95,15 @@ class EspecieListView(FMAccessMixin, ListView):
             return Especie.objects.none()
         return Especie.objects.filter(participant=participant).order_by('nome')
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        if user.is_manager or user.is_auditor:
+            from participants.models import Participant
+            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        ctx['selected_participant'] = self.get_participant()
+        return ctx
+
 
 class EspecieCreateView(FMAccessMixin, CreateView):
     model = Especie
@@ -133,6 +142,15 @@ class PropriedadeListView(FMAccessMixin, ListView):
         if not participant:
             return Propriedade.objects.none()
         return Propriedade.objects.filter(participant=participant).order_by('nome')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        if user.is_manager or user.is_auditor:
+            from participants.models import Participant
+            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        ctx['selected_participant'] = self.get_participant()
+        return ctx
 
 
 class PropriedadeCreateView(FMAccessMixin, CreateView):
@@ -173,6 +191,15 @@ class InventarioEntradaListView(FMAccessMixin, ListView):
             return InventarioEntrada.objects.none()
         return InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie')
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        if user.is_manager or user.is_auditor:
+            from participants.models import Participant
+            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        ctx['selected_participant'] = self.get_participant()
+        return ctx
+
 
 class InventarioEntradaCreateView(FMAccessMixin, CreateView):
     model = InventarioEntrada
@@ -207,6 +234,15 @@ class SaidaManejoListView(FMAccessMixin, ListView):
         return SaidaManejo.objects.filter(participant=participant).select_related(
             'entrada__propriedade', 'entrada__especie'
         )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        if user.is_manager or user.is_auditor:
+            from participants.models import Participant
+            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        ctx['selected_participant'] = self.get_participant()
+        return ctx
 
 
 class SaidaManejoCreateView(FMAccessMixin, CreateView):

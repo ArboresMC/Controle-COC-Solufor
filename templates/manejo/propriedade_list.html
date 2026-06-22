@@ -2,12 +2,34 @@
 {% block hero_title %}Propriedades{% endblock %}
 {% block hero_text %}Cadastre as propriedades/projetos certificados em Manejo Florestal.{% endblock %}
 {% block content %}
+
+{% if user.is_manager or user.is_auditor %}
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-header">
+    <div><div class="kicker">Filtrar</div><h2 class="card-title">Selecione o participante</h2></div>
+  </div>
+  <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <select name="participant" style="min-width:280px;">
+      <option value="">— Selecione —</option>
+      {% for p in participants %}
+        <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Filtrar</button>
+  </form>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header">
     <div><h2 class="card-title">Propriedades cadastradas</h2></div>
-    <a class="btn" href="{% url 'manejo_propriedade_create' %}">Nova propriedade</a>
+    {% if selected_participant %}
+    <a class="btn" href="{% url 'manejo_propriedade_create' %}?participant={{ selected_participant.id }}">Nova propriedade</a>
+    {% endif %}
   </div>
-  {% if propriedades %}
+  {% if not selected_participant %}
+  <div class="empty-state">Selecione um participante acima para ver e cadastrar propriedades.</div>
+  {% elif propriedades %}
   <div class="table-wrap compact-table">
     <table>
       <tr><th>Nome</th><th>Código/CAR</th><th>Área (ha)</th><th>Status</th><th>Ação</th></tr>

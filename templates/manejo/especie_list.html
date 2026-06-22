@@ -2,12 +2,34 @@
 {% block hero_title %}Espécies{% endblock %}
 {% block hero_text %}Cadastre as espécies manejadas e seus fatores de conversão próprios.{% endblock %}
 {% block content %}
+
+{% if user.is_manager or user.is_auditor %}
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-header">
+    <div><div class="kicker">Filtrar</div><h2 class="card-title">Selecione o participante</h2></div>
+  </div>
+  <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <select name="participant" style="min-width:280px;">
+      <option value="">— Selecione —</option>
+      {% for p in participants %}
+        <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Filtrar</button>
+  </form>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header">
     <div><h2 class="card-title">Espécies cadastradas</h2><p class="card-subtitle">Cada espécie tem seu próprio fator de conversão m³ → tonelada e m³ → st.</p></div>
-    <a class="btn" href="{% url 'manejo_especie_create' %}">Nova espécie</a>
+    {% if selected_participant %}
+    <a class="btn" href="{% url 'manejo_especie_create' %}?participant={{ selected_participant.id }}">Nova espécie</a>
+    {% endif %}
   </div>
-  {% if especies %}
+  {% if not selected_participant %}
+  <div class="empty-state">Selecione um participante acima para ver e cadastrar espécies.</div>
+  {% elif especies %}
   <div class="table-wrap compact-table">
     <table>
       <tr><th>Nome</th><th>Fator m³→ton</th><th>Fator m³→st</th><th>Status</th><th>Ação</th></tr>

@@ -1,12 +1,34 @@
 {% extends "base.html" %}
 {% block hero_title %}Entradas de Inventário{% endblock %}
 {% block content %}
+
+{% if user.is_manager or user.is_auditor %}
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-header">
+    <div><div class="kicker">Filtrar</div><h2 class="card-title">Selecione o participante</h2></div>
+  </div>
+  <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <select name="participant" style="min-width:280px;">
+      <option value="">— Selecione —</option>
+      {% for p in participants %}
+        <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Filtrar</button>
+  </form>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header">
     <div><h2 class="card-title">Entradas de inventário</h2><p class="card-subtitle">Volume certificado por propriedade e espécie.</p></div>
-    <a class="btn" href="{% url 'manejo_entrada_create' %}">Nova entrada</a>
+    {% if selected_participant %}
+    <a class="btn" href="{% url 'manejo_entrada_create' %}?participant={{ selected_participant.id }}">Nova entrada</a>
+    {% endif %}
   </div>
-  {% if entradas %}
+  {% if not selected_participant %}
+  <div class="empty-state">Selecione um participante acima para ver e lançar entradas.</div>
+  {% elif entradas %}
   <div class="table-wrap compact-table">
     <table>
       <tr><th>Data</th><th>Propriedade</th><th>Espécie</th><th>Documento</th><th>Volume informado</th><th>Volume (m³)</th><th>Saldo (m³)</th></tr>
