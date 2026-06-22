@@ -1,6 +1,0 @@
-# Adicionar 'manejo' em INSTALLED_APPS no config/settings.py
-
-INSTALLED_APPS = [
-    ...
-    'manejo',
-]
