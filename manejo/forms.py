@@ -16,10 +16,12 @@ class EspecieForm(forms.ModelForm):
 class PropriedadeForm(forms.ModelForm):
     class Meta:
         model = Propriedade
-        fields = ['nome', 'codigo', 'area_hectares', 'ativa']
+        fields = ['nome', 'codigo', 'municipio', 'uf', 'area_hectares', 'ativa']
         widgets = {
             'nome': forms.TextInput(attrs={'placeholder': 'Ex: Horongozo - Rio Saltinho'}),
             'codigo': forms.TextInput(attrs={'placeholder': 'CAR ou código interno (opcional)'}),
+            'municipio': forms.TextInput(attrs={'placeholder': 'Ex: Bituruna'}),
+            'uf': forms.TextInput(attrs={'placeholder': 'Ex: PR', 'maxlength': '2'}),
         }
 
 

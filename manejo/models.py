@@ -65,6 +65,8 @@ class Propriedade(models.Model):
     )
     nome = models.CharField('Nome do projeto/propriedade', max_length=255)
     codigo = models.CharField('Código/CAR', max_length=100, blank=True)
+    municipio = models.CharField('Município', max_length=120, blank=True)
+    uf = models.CharField('UF', max_length=2, blank=True)
     area_hectares = models.DecimalField('Área (ha)', max_digits=12, decimal_places=2, null=True, blank=True)
     ativa = models.BooleanField('Ativa', default=True)
     created_at = models.DateTimeField(auto_now_add=True)

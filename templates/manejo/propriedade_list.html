@@ -32,10 +32,11 @@
   {% elif propriedades %}
   <div class="table-wrap compact-table">
     <table>
-      <tr><th>Nome</th><th>Código/CAR</th><th>Área (ha)</th><th>Status</th><th>Ação</th></tr>
+      <tr><th>Nome</th><th>Município/UF</th><th>Código/CAR</th><th>Área (ha)</th><th>Status</th><th>Ação</th></tr>
       {% for p in propriedades %}
       <tr>
         <td><strong>{{ p.nome }}</strong></td>
+        <td>{{ p.municipio }}{% if p.uf %}/{{ p.uf }}{% endif %}</td>
         <td>{{ p.codigo|default:"—" }}</td>
         <td>{{ p.area_hectares|default:"—" }}</td>
         <td>{% if p.ativa %}<span class="badge success">Ativa</span>{% else %}<span class="badge neutral">Inativa</span>{% endif %}</td>
