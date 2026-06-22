@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block hero_title %}Entradas de Inventário{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div><h2 class="card-title">Entradas de inventário</h2><p class="card-subtitle">Volume certificado por propriedade e espécie.</p></div>
+    <a class="btn" href="{% url 'manejo_entrada_create' %}">Nova entrada</a>
+  </div>
+  {% if entradas %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Data</th><th>Propriedade</th><th>Espécie</th><th>Documento</th><th>Volume informado</th><th>Volume (m³)</th><th>Saldo (m³)</th></tr>
+      {% for e in entradas %}
+      <tr>
+        <td>{{ e.data|date:"d/m/Y" }}</td>
+        <td><strong>{{ e.propriedade.nome }}</strong></td>
+        <td>{{ e.especie.nome }}</td>
+        <td>{{ e.documento|default:"—" }}</td>
+        <td>{{ e.volume }} {{ e.get_unidade_display }}</td>
+        <td>{{ e.volume_m3|floatformat:4 }}</td>
+        <td>{{ e.saldo_disponivel_m3|floatformat:4 }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma entrada registrada ainda.</div>
+  {% endif %}
+</div>
+{% endblock %}

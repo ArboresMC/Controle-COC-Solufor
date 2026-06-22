@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block hero_title %}Espécies{% endblock %}
+{% block hero_text %}Cadastre as espécies manejadas e seus fatores de conversão próprios.{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div><h2 class="card-title">Espécies cadastradas</h2><p class="card-subtitle">Cada espécie tem seu próprio fator de conversão m³ → tonelada e m³ → st.</p></div>
+    <a class="btn" href="{% url 'manejo_especie_create' %}">Nova espécie</a>
+  </div>
+  {% if especies %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Nome</th><th>Fator m³→ton</th><th>Fator m³→st</th><th>Status</th><th>Ação</th></tr>
+      {% for e in especies %}
+      <tr>
+        <td><strong>{{ e.nome }}</strong></td>
+        <td>{{ e.fator_m3_para_ton }}</td>
+        <td>{{ e.fator_m3_para_st }}</td>
+        <td>{% if e.ativo %}<span class="badge success">Ativa</span>{% else %}<span class="badge neutral">Inativa</span>{% endif %}</td>
+        <td><a class="inline-link" href="{% url 'manejo_especie_update' e.pk %}">Editar</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma espécie cadastrada ainda.</div>
+  {% endif %}
+</div>
+{% endblock %}

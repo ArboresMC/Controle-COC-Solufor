@@ -27,6 +27,7 @@ urlpatterns = [
     path('transactions/', include('transactions.urls')),
     path('compliance/', include('compliance.urls')),
     path('reports/', include('reports.urls')),
+    path('manejo/', include('manejo.urls')),
 ]
 
 if settings.DEBUG:

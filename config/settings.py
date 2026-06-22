@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'transactions',
     'compliance',
     'reports',
+    'manejo',
 ]
 
 MIDDLEWARE = [

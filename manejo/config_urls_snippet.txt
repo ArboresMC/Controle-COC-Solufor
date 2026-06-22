@@ -1,0 +1,3 @@
+# Adicionar no config/urls.py principal (na lista urlpatterns):
+
+path('manejo/', include('manejo.urls')),

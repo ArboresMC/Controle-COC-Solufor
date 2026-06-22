@@ -24,6 +24,7 @@ class Participant(models.Model):
         ('inactive', 'Inativo'),
         ('suspended', 'Suspenso'),
     ]
+
     organization = models.ForeignKey(
         Organization,
         on_delete=models.PROTECT,
@@ -39,6 +40,11 @@ class Participant(models.Model):
     contact_email = models.EmailField('E-mail', blank=True)
     contact_phone = models.CharField('Telefone', max_length=30, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+
+    # Programas de certificação que este participante atende
+    ativo_coc = models.BooleanField('Cadeia de Custódia (CoC)', default=True)
+    ativo_fm = models.BooleanField('Manejo Florestal (FM)', default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block hero_title %}Nova entrada de inventário{% endblock %}
+{% block hero_text %}Registre o volume certificado de uma propriedade e espécie específica.{% endblock %}
+{% block content %}
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div><h2 class="card-title">Nova entrada de inventário</h2></div>
+    </div>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="actions">
+        <button class="btn" type="submit">Salvar entrada</button>
+        <a class="btn secondary" href="javascript:history.back()">Cancelar</a>
+      </div>
+    </form>
+  </div>
+  <div class="card soft">
+    <div class="card-header">
+      <div><div class="kicker">Orientação</div><h2 class="card-title">Como funciona</h2></div>
+    </div>
+    <div class="stack">
+      <div class="info-box"><strong>Propriedade + Espécie</strong><br><span class="muted">Cada combinação gera um saldo independente. Se a propriedade tem mais de uma espécie, registre uma entrada para cada.</span></div>
+      <div class="info-box"><strong>Conversão automática</strong><br><span class="muted">O volume informado é convertido para m³ usando o fator cadastrado para a espécie selecionada.</span></div>
+      <div class="info-box"><strong>Documento</strong><br><span class="muted">Recomendado anexar o contrato/inventário que sustenta o volume — é o documento que valida a rastreabilidade.</span></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

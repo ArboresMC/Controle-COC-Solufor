@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block hero_title %}{% if form.instance.pk %}Editar{% else %}Nova{% endif %} espécie{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div><h2 class="card-title">{% if form.instance.pk %}Editar{% else %}Nova{% endif %} espécie</h2>
+    <p class="card-subtitle">Informe os fatores de conversão específicos desta espécie para este participante.</p></div>
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="actions">
+      <button class="btn" type="submit">Salvar</button>
+      <a class="btn secondary" href="{% url 'manejo_especie_list' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block hero_title %}Saídas de Manejo{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div><h2 class="card-title">Saídas registradas</h2></div>
+    <a class="btn" href="{% url 'manejo_saida_create' %}">Nova saída</a>
+  </div>
+  {% if saidas %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Data</th><th>Propriedade</th><th>Espécie</th><th>Nº NF</th><th>Cliente</th><th>Volume informado</th><th>Volume (m³)</th><th>FSC</th></tr>
+      {% for s in saidas %}
+      <tr>
+        <td>{{ s.data|date:"d/m/Y" }}</td>
+        <td><strong>{{ s.entrada.propriedade.nome }}</strong></td>
+        <td>{{ s.entrada.especie.nome }}</td>
+        <td>{{ s.documento|default:"—" }}</td>
+        <td>{{ s.cliente_nome|default:"—" }}</td>
+        <td>{{ s.volume }} {{ s.get_unidade_display }}</td>
+        <td>{{ s.volume_m3|floatformat:4 }}</td>
+        <td>{% if s.declaracao_fsc %}<span class="badge success">Sim</span>{% else %}<span class="badge neutral">Não</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma saída registrada ainda.</div>
+  {% endif %}
+</div>
+{% endblock %}

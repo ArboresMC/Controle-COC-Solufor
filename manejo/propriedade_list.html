@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block hero_title %}Propriedades{% endblock %}
+{% block hero_text %}Cadastre as propriedades/projetos certificados em Manejo Florestal.{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div><h2 class="card-title">Propriedades cadastradas</h2></div>
+    <a class="btn" href="{% url 'manejo_propriedade_create' %}">Nova propriedade</a>
+  </div>
+  {% if propriedades %}
+  <div class="table-wrap compact-table">
+    <table>
+      <tr><th>Nome</th><th>Código/CAR</th><th>Área (ha)</th><th>Status</th><th>Ação</th></tr>
+      {% for p in propriedades %}
+      <tr>
+        <td><strong>{{ p.nome }}</strong></td>
+        <td>{{ p.codigo|default:"—" }}</td>
+        <td>{{ p.area_hectares|default:"—" }}</td>
+        <td>{% if p.ativa %}<span class="badge success">Ativa</span>{% else %}<span class="badge neutral">Inativa</span>{% endif %}</td>
+        <td><a class="inline-link" href="{% url 'manejo_propriedade_update' p.pk %}">Editar</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">Nenhuma propriedade cadastrada ainda.</div>
+  {% endif %}
+</div>
+{% endblock %}
