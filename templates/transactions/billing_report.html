@@ -3,38 +3,43 @@
 {% block hero_text %}Régua de cobrança baseada em propriedades (Manejo Florestal) e movimentações mensais (Cadeia de Custódia).{% endblock %}
 {% block content %}
 
-<div class="card soft" style="margin-bottom:18px;">
-  <div class="card-header">
-    <div>
-      <div class="kicker">Faixas configuradas</div>
-      <h2 class="card-title">Como o valor é calculado</h2>
+<form method="post" action="{% url 'billing_tier_update' %}">
+  {% csrf_token %}
+  <div class="card soft" style="margin-bottom:18px;">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Faixas configuradas</div>
+        <h2 class="card-title">Como o valor é calculado</h2>
+        <p class="card-subtitle">Os limites de cada faixa são fixos. Edite apenas o valor mensal e clique em salvar.</p>
+      </div>
+      <button type="submit" class="btn">Salvar valores das faixas</button>
     </div>
-  </div>
-  <div class="dashboard-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
-    <div class="info-box">
-      <strong>Cadeia de Custódia (por movimentações/mês)</strong>
-      <div class="stack" style="margin-top:8px;">
-        {% for limite, valor in faixas_coc %}
-        <div class="summary-pill">
-          <strong>{% if limite %}Até {{ limite }}{% else %}Acima do limite anterior{% endif %}</strong>
-          <span>R$ {{ valor }}/mês</span>
+    <div class="dashboard-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+      <div class="info-box">
+        <strong>Cadeia de Custódia (por movimentações/mês)</strong>
+        <div class="stack" style="margin-top:8px;">
+          {% for faixa in faixas_coc %}
+          <div class="summary-pill">
+            <strong>{% if faixa.limite %}Até {{ faixa.limite }}{% else %}Acima do limite anterior{% endif %}</strong>
+            <span>R$ <input type="text" name="valor_coc_{{ faixa.ordem }}" value="{{ faixa.valor }}" style="width:70px;" inputmode="decimal">/mês</span>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
+      </div>
+      <div class="info-box">
+        <strong>Manejo Florestal (por propriedades ativas)</strong>
+        <div class="stack" style="margin-top:8px;">
+          {% for faixa in faixas_fm %}
+          <div class="summary-pill">
+            <strong>{% if faixa.limite %}Até {{ faixa.limite }}{% else %}Acima do limite anterior{% endif %}</strong>
+            <span>R$ <input type="text" name="valor_fm_{{ faixa.ordem }}" value="{{ faixa.valor }}" style="width:70px;" inputmode="decimal">/mês</span>
+          </div>
+          {% endfor %}
+        </div>
       </div>
     </div>
-    <div class="info-box">
-      <strong>Manejo Florestal (por propriedades ativas)</strong>
-      <div class="stack" style="margin-top:8px;">
-        {% for limite, valor in faixas_fm %}
-        <div class="summary-pill">
-          <strong>{% if limite %}Até {{ limite }}{% else %}Acima do limite anterior{% endif %}</strong>
-          <span>R$ {{ valor }}/mês</span>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
   </div>
-</div>
+</form>
 
 <div class="card">
   <div class="card-header">

@@ -8,7 +8,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView, View
 from catalog.models import Counterparty, Product
-from compliance.models import MonthlyClosing
+from compliance.models import MonthlyClosing, BillingTier
 from participants.models import Participant
 from .forms import EntryRecordForm, SaleRecordForm, TransformationRecordForm
 from .models import EntryRecord, SaleRecord, TransformationRecord
@@ -741,15 +741,26 @@ class DataDeleteSingleView(ManagerRequiredMixin, View):
 class BillingReportView(ManagerRequiredMixin, TemplateView):
     template_name = 'transactions/billing_report.html'
 
-    # (limite_maximo_ou_None, valor_mensal)
-    FAIXAS_FM = [(3, 25), (10, 60), (20, 110), (None, 180)]
-    FAIXAS_COC = [(20, 30), (50, 70), (None, 120)]
+    # Limites de cada faixa (fixos). O valor em R$ vem do banco (BillingTier);
+    # estes defaults só são usados se uma faixa esperada não existir ainda.
+    LIMITES_FM = [3, 10, 20, None]
+    LIMITES_COC = [20, 50, None]
+    DEFAULTS_FM = [25, 60, 110, 180]
+    DEFAULTS_COC = [30, 70, 120]
+
+    def _faixas_com_valores(self, modulo, limites, defaults):
+        tiers = {t.ordem: t.valor for t in BillingTier.objects.filter(modulo=modulo)}
+        faixas = []
+        for i, limite in enumerate(limites, start=1):
+            valor = tiers.get(i, defaults[i - 1])
+            faixas.append({'ordem': i, 'limite': limite, 'valor': valor})
+        return faixas
 
     def _valor_por_faixa(self, count, faixas):
-        for limite, valor in faixas:
-            if limite is None or count <= limite:
-                return valor
-        return faixas[-1][1]
+        for faixa in faixas:
+            if faixa['limite'] is None or count <= faixa['limite']:
+                return faixa['valor']
+        return faixas[-1]['valor']
 
     def get_context_data(self, **kwargs):
         from manejo.models import Propriedade
@@ -757,6 +768,9 @@ class BillingReportView(ManagerRequiredMixin, TemplateView):
         user = self.request.user
         current_org = getattr(user, 'current_organization', None)
         today = date.today()
+
+        faixas_fm = self._faixas_com_valores(BillingTier.MODULO_FM, self.LIMITES_FM, self.DEFAULTS_FM)
+        faixas_coc = self._faixas_com_valores(BillingTier.MODULO_COC, self.LIMITES_COC, self.DEFAULTS_COC)
 
         participants = Participant.objects.filter(status='active')
         participants = participants.filter(organization=current_org) if current_org else Participant.objects.none()
@@ -777,12 +791,12 @@ class BillingReportView(ManagerRequiredMixin, TemplateView):
                         participant=p, movement_date__year=today.year, movement_date__month=today.month
                     ).count()
                 )
-                valor_coc = self._valor_por_faixa(mov_count, self.FAIXAS_COC)
+                valor_coc = self._valor_por_faixa(mov_count, faixas_coc)
                 detalhe_partes.append(f"CoC: {mov_count} mov./mês")
 
             if p.ativo_fm:
                 prop_count = Propriedade.objects.filter(participant=p, ativa=True).count()
-                valor_fm = self._valor_por_faixa(prop_count, self.FAIXAS_FM)
+                valor_fm = self._valor_por_faixa(prop_count, faixas_fm)
                 detalhe_partes.append(f"FM: {prop_count} propriedade(s)")
 
             valor_total = valor_coc + valor_fm
@@ -801,8 +815,53 @@ class BillingReportView(ManagerRequiredMixin, TemplateView):
         ctx.update({
             'rows': rows,
             'total_mensalidade': total_mensalidade,
-            'faixas_fm': self.FAIXAS_FM,
-            'faixas_coc': self.FAIXAS_COC,
+            'faixas_fm': faixas_fm,
+            'faixas_coc': faixas_coc,
             'competencia': today,
         })
         return ctx
+
+
+class BillingTierUpdateView(ManagerRequiredMixin, View):
+    """Salva os valores em R$ editados pelo gestor para cada faixa.
+
+    Os limites das faixas são fixos (definidos em BillingReportView);
+    só o campo `valor` de cada BillingTier é atualizado aqui.
+    """
+
+    def post(self, request, *args, **kwargs):
+        atualizados = 0
+        for key, raw_value in request.POST.items():
+            if not key.startswith('valor_'):
+                continue
+            try:
+                _, modulo, ordem_str = key.split('_', 2)
+                ordem = int(ordem_str)
+            except ValueError:
+                continue
+
+            raw_value = (raw_value or '').strip().replace(',', '.')
+            if not raw_value:
+                continue
+            try:
+                valor = float(raw_value)
+            except ValueError:
+                messages.error(request, f'Valor inválido para a faixa {ordem} de {modulo}.')
+                continue
+
+            if valor < 0:
+                messages.error(request, f'Valor da faixa {ordem} de {modulo} não pode ser negativo.')
+                continue
+
+            BillingTier.objects.update_or_create(
+                modulo=modulo, ordem=ordem,
+                defaults={'valor': valor},
+            )
+            atualizados += 1
+
+        if atualizados:
+            messages.success(request, f'{atualizados} faixa(s) de cobrança atualizada(s) com sucesso.')
+        else:
+            messages.warning(request, 'Nenhum valor foi alterado.')
+
+        return redirect('billing_report')

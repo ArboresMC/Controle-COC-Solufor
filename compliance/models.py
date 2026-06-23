@@ -73,3 +73,38 @@ class MonthlyClosing(models.Model):
     @property
     def is_locked(self):
         return self.status == self.STATUS_APPROVED
+
+
+class BillingTier(models.Model):
+    """Faixa de cobrança configurável pelo gestor.
+
+    Os limites de cada faixa são fixos no código (definidos em
+    transactions.views.BillingReportView), apenas o valor em R$ de
+    cada faixa é editável e fica persistido aqui.
+    """
+    MODULO_COC = 'coc'
+    MODULO_FM = 'fm'
+    MODULO_CHOICES = [
+        (MODULO_COC, 'Cadeia de Custódia'),
+        (MODULO_FM, 'Manejo Florestal'),
+    ]
+
+    modulo = models.CharField(max_length=10, choices=MODULO_CHOICES, verbose_name='Módulo')
+    ordem = models.PositiveIntegerField(verbose_name='Ordem da faixa')
+    limite_max = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='Limite máximo da faixa',
+        help_text='Vazio significa "acima do limite anterior" (última faixa).',
+    )
+    valor = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Valor mensal (R$)')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('modulo', 'ordem')
+        ordering = ['modulo', 'ordem']
+        verbose_name = 'Faixa de Cobrança'
+        verbose_name_plural = 'Faixas de Cobrança'
+
+    def __str__(self):
+        teto = f"até {self.limite_max}" if self.limite_max else "acima"
+        return f"{self.get_modulo_display()} — {teto}: R$ {self.valor}"
