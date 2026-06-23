@@ -13,7 +13,7 @@
   {% endfor %}
 {% endif %}
 
-{% if user.is_manager or user.is_auditor %}
+{% if user.is_manager or user.is_auditor or user.is_manejo_multi %}
 <div class="card" style="margin-bottom:18px;">
   <div class="card-header">
     <div>

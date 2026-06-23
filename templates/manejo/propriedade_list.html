@@ -3,7 +3,7 @@
 {% block hero_text %}Cadastre as propriedades/projetos certificados em Manejo Florestal.{% endblock %}
 {% block content %}
 
-{% if user.is_manager or user.is_auditor %}
+{% if user.is_manager or user.is_auditor or user.is_manejo_multi %}
 <div class="card" style="margin-bottom:18px;">
   <div class="card-header">
     <div><div class="kicker">Filtrar</div><h2 class="card-title">Selecione o participante</h2></div>

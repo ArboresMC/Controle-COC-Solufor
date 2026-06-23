@@ -1,4 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  #id_participantes_manejo { max-height: 260px; overflow-y: auto; padding: 10px; margin: 4px 0 16px; border: 1px solid var(--border, #ddd); border-radius: 8px; }
+  #id_participantes_manejo div { padding: 2px 0; }
+</style>
 <div class="card" style="max-width: 860px;"><div class="card-header"><div><div class="kicker">Acesso</div><h2 class="card-title">{% if form.instance.pk %}Editar usuário{% else %}Novo usuário{% endif %}</h2><p class="card-subtitle">Defina o perfil de acesso e o participante associado quando aplicável.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar usuário</button><a class="btn secondary" href="/users/">Cancelar</a></div></form></div>
 {% endblock %}

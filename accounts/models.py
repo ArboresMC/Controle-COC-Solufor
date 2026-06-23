@@ -24,6 +24,17 @@ class User(AbstractUser):
         blank=True,
         related_name='users',
     )
+    # Acesso adicional a múltiplos participantes — usado APENAS no módulo de
+    # Manejo Florestal, para o caso de uma empresa "mini-gestora" que opera o
+    # sistema em nome de outros participantes do grupo. Não afeta o COC, que
+    # continua restrito a `participant` (FK acima).
+    participantes_manejo = models.ManyToManyField(
+        'participants.Participant',
+        blank=True,
+        related_name='usuarios_manejo',
+        verbose_name='Participantes adicionais (Manejo Florestal)',
+        help_text='Permite que este usuário gerencie Manejo Florestal de mais de um participante. Não se aplica ao módulo de Cadeia de Custódia.',
+    )
     must_change_password = models.BooleanField(default=False)
 
     def clean(self):
@@ -47,6 +58,20 @@ class User(AbstractUser):
     @property
     def is_participant_user(self):
         return self.role == 'participant'
+
+    @property
+    def is_manejo_multi(self):
+        """True se este usuário opera Manejo Florestal de mais de um participante
+        (o "mini-gestor" descrito na decisão de produto). Não tem efeito sobre CoC."""
+        return self.pk is not None and self.participantes_manejo.exists()
+
+    def manejo_participant_ids(self):
+        """IDs de todos os participantes de Manejo que este usuário pode acessar:
+        o participante principal (se ativo_fm) + os participantes extras do M2M."""
+        ids = set(self.participantes_manejo.filter(ativo_fm=True).values_list('id', flat=True))
+        if self.participant_id and getattr(self.participant, 'ativo_fm', False):
+            ids.add(self.participant_id)
+        return ids
 
     @property
     def current_organization(self):

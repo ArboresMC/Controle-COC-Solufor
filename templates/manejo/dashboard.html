@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block hero_title %}Manejo Florestal{% endblock %}
 {% block hero_text %}
-{% if is_aggregate %}Visão consolidada de todos os membros do programa de Manejo Florestal.{% else %}Controle de inventário certificado por propriedade e espécie, com saldo disponível para extração.{% endif %}
+{% if is_mini_gestor %}Visão consolidada dos participantes que você opera no programa de Manejo Florestal.{% elif is_aggregate %}Visão consolidada de todos os membros do programa de Manejo Florestal.{% else %}Controle de inventário certificado por propriedade e espécie, com saldo disponível para extração.{% endif %}
 {% endblock %}
 {% block content %}
 
@@ -19,11 +19,17 @@
   <div class="card"><div class="empty-state">Seu cadastro ainda não tem propriedades de Manejo Florestal vinculadas.</div></div>
 {% elif is_aggregate %}
 
+{% if is_mini_gestor %}
+<div class="card soft" style="margin-bottom:14px;border-left:4px solid var(--accent);">
+  <p style="margin:0;font-size:13px;color:var(--muted);">📋 Você está vendo o consolidado dos <strong>{{ total_membros }}</strong> participante(s) que você opera. Para ver um participante específico, use <a href="{% url 'manejo_participante_dashboard' %}">Ver por participante</a>.</p>
+</div>
+{% endif %}
+
 <div class="grid metrics">
-  <div class="card metric-card"><div class="metric-label">Membros FM ativos</div><div class="metric-value">{{ total_membros }}</div></div>
+  <div class="card metric-card"><div class="metric-label">{% if is_mini_gestor %}Seus participantes{% else %}Membros FM ativos{% endif %}</div><div class="metric-value">{{ total_membros }}</div></div>
   <div class="card metric-card"><div class="metric-label">Propriedades ativas</div><div class="metric-value">{{ total_propriedades }}</div></div>
-  <div class="card metric-card"><div class="metric-label">Volume inventariado</div><div class="metric-value">{{ total_volume|floatformat:0 }}</div><div class="metric-foot">m³ total do grupo</div></div>
-  <div class="card metric-card"><div class="metric-label">Saldo disponível</div><div class="metric-value">{{ total_saldo|floatformat:0 }}</div><div class="metric-foot">m³ restante no grupo</div></div>
+  <div class="card metric-card"><div class="metric-label">Volume inventariado</div><div class="metric-value">{{ total_volume|floatformat:0 }}</div><div class="metric-foot">m³ total{% if not is_mini_gestor %} do grupo{% endif %}</div></div>
+  <div class="card metric-card"><div class="metric-label">Saldo disponível</div><div class="metric-value">{{ total_saldo|floatformat:0 }}</div><div class="metric-foot">m³ restante{% if not is_mini_gestor %} no grupo{% endif %}</div></div>
 </div>
 
 <div class="dashboard-grid-2" style="display:grid;grid-template-columns:1.2fr .8fr;gap:18px;">
