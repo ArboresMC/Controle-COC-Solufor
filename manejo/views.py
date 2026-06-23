@@ -289,6 +289,12 @@ class EspecieUpdateView(FMAccessMixin, UpdateView):
     success_url = reverse_lazy('manejo_especie_list')
 
     def get_queryset(self):
+        user = self.request.user
+        if user.is_manager or user.is_auditor:
+            from participants.models import Participant
+            current_org = getattr(user, 'current_organization', None)
+            membros_org = Participant.objects.filter(organization=current_org) if current_org else Participant.objects.none()
+            return Especie.objects.filter(participant__in=membros_org)
         return Especie.objects.filter(participant=self.get_participant())
 
     def form_valid(self, form):
@@ -337,6 +343,14 @@ class PropriedadeUpdateView(FMAccessMixin, UpdateView):
     success_url = reverse_lazy('manejo_propriedade_list')
 
     def get_queryset(self):
+        user = self.request.user
+        if user.is_manager or user.is_auditor:
+            # Gestor/auditor pode editar qualquer propriedade do seu ambiente,
+            # mesmo sem ?participant= na URL (ex: vindo direto da listagem).
+            from participants.models import Participant
+            current_org = getattr(user, 'current_organization', None)
+            membros_org = Participant.objects.filter(organization=current_org) if current_org else Participant.objects.none()
+            return Propriedade.objects.filter(participant__in=membros_org)
         return Propriedade.objects.filter(participant=self.get_participant())
 
     def form_valid(self, form):
