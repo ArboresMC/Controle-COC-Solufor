@@ -76,7 +76,7 @@ class SaidaManejoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.participant = participant
         if participant:
-            entradas = InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie')
+            entradas = InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie').com_saldo()
             self.fields['entrada'].queryset = entradas
             self.fields['entrada'].label_from_instance = lambda obj: (
                 f"{obj.propriedade.nome} — {obj.especie.nome} (saldo: {obj.saldo_disponivel_m3:.4f} m³)"

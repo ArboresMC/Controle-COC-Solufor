@@ -47,7 +47,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='BillingTier',
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('modulo', models.CharField(choices=[('coc', 'Cadeia de Custódia'), ('fm', 'Manejo Florestal')], max_length=10, verbose_name='Módulo')),
                 ('ordem', models.PositiveIntegerField(verbose_name='Ordem da faixa')),
                 ('limite_max', models.PositiveIntegerField(blank=True, help_text='Vazio significa "acima do limite anterior" (última faixa).', null=True, verbose_name='Limite máximo da faixa')),

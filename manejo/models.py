@@ -1,6 +1,8 @@
 from decimal import Decimal
 from django.conf import settings
 from django.db import models
+from django.db.models import OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 
 
 UNIDADE_CHOICES = [
@@ -8,6 +10,27 @@ UNIDADE_CHOICES = [
     ('ton', 'Tonelada'),
     ('st', 'Estéreo (st)'),
 ]
+
+
+class InventarioEntradaQuerySet(models.QuerySet):
+    def com_saldo(self):
+        """Anota volume_vendido_m3_calc e saldo_disponivel_m3_calc via subquery agregada,
+        evitando 1 query de Sum() por entrada (N+1) ao iterar o queryset."""
+        vendido_subquery = (
+            SaidaManejo.objects
+            .filter(entrada=OuterRef('pk'))
+            .values('entrada')
+            .annotate(total=Sum('volume_m3'))
+            .values('total')
+        )
+        return self.annotate(
+            volume_vendido_m3_calc=Coalesce(
+                Subquery(vendido_subquery, output_field=models.DecimalField(max_digits=14, decimal_places=4)),
+                Value(Decimal('0')),
+            )
+        ).annotate(
+            saldo_disponivel_m3_calc=models.F('volume_m3') - models.F('volume_vendido_m3_calc')
+        )
 
 
 class Especie(models.Model):
@@ -77,6 +100,9 @@ class Propriedade(models.Model):
         ordering = ['nome']
         verbose_name = 'Propriedade'
         verbose_name_plural = 'Propriedades'
+        indexes = [
+            models.Index(fields=['participant', 'ativa'], name='manejo_prop_part_ativa_idx'),
+        ]
 
     def __str__(self):
         return self.nome
@@ -108,18 +134,28 @@ class InventarioEntrada(models.Model):
         ordering = ['-data', '-id']
         verbose_name = 'Entrada de Inventário'
         verbose_name_plural = 'Entradas de Inventário'
+        indexes = [
+            models.Index(fields=['participant', '-data'], name='manejo_entrada_part_data_idx'),
+        ]
+
+    objects = InventarioEntradaQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.propriedade} — {self.especie} ({self.volume_m3} m³)"
 
     @property
     def volume_vendido_m3(self):
+        # Se o queryset já veio anotado via .com_saldo(), reaproveita (evita N+1).
+        if hasattr(self, 'volume_vendido_m3_calc'):
+            return self.volume_vendido_m3_calc
         from django.db.models import Sum
         total = self.saidas.aggregate(total=Sum('volume_m3'))['total']
         return total or Decimal('0')
 
     @property
     def saldo_disponivel_m3(self):
+        if hasattr(self, 'saldo_disponivel_m3_calc'):
+            return self.saldo_disponivel_m3_calc
         return self.volume_m3 - self.volume_vendido_m3
 
 
@@ -150,6 +186,10 @@ class SaidaManejo(models.Model):
         ordering = ['-data', '-id']
         verbose_name = 'Saída de Manejo'
         verbose_name_plural = 'Saídas de Manejo'
+        indexes = [
+            models.Index(fields=['participant', '-data'], name='manejo_saida_part_data_idx'),
+            models.Index(fields=['entrada'], name='manejo_saida_entrada_idx'),
+        ]
 
     def __str__(self):
         return f"{self.entrada.propriedade} — {self.volume_m3} m³ ({self.data})"

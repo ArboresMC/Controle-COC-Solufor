@@ -38,7 +38,7 @@ class FMAccessMixin(LoginRequiredMixin):
 def _build_participant_context(participant):
     """Monta o contexto de saldo/inventário de UM participante FM. Usado tanto
     pelo painel direto do participante quanto pelo drill-in do gestor."""
-    entradas = InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie')
+    entradas = InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie').com_saldo()
     saldo_rows = []
     total_inicial = Decimal('0')
     total_saldo = Decimal('0')
@@ -71,7 +71,22 @@ def _build_participant_context(participant):
 
 def _build_chart_data(membros_qs, today):
     """Gráfico dos últimos 6 meses: entradas de inventário e saídas reais
-    (exclui ajustes históricos) agregadas entre os membros informados."""
+    (exclui ajustes históricos) agregadas entre os membros informados.
+
+    Otimizado para 2 queries agrupadas (em vez de 12 queries, uma por mês)
+    e cacheado por 10 minutos — o mês corrente pode ficar levemente
+    desatualizado nesse intervalo, mas evita recalcular o histórico
+    completo a cada carregamento do painel."""
+    from django.core.cache import cache
+    from django.db.models import Count
+    from django.db.models.functions import TruncMonth
+
+    membros_ids = tuple(sorted(membros_qs.values_list('id', flat=True)))
+    cache_key = f"fm_chart:{hash(membros_ids)}:{today.year}:{today.month}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+
     meses_pt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     months = []
     for i in range(5, -1, -1):
@@ -82,22 +97,31 @@ def _build_chart_data(membros_qs, today):
             y -= 1
         months.append((y, m))
 
+    inicio = date(months[0][0], months[0][1], 1)
     labels = [meses_pt[m - 1] for y, m in months]
-    entradas_data, saidas_data = [], []
-    for y, m in months:
-        entradas_data.append(
-            InventarioEntrada.objects.filter(participant__in=membros_qs, data__year=y, data__month=m).count()
-        )
-        saidas_data.append(
-            SaidaManejo.objects.filter(participant__in=membros_qs, data__year=y, data__month=m)
-            .exclude(documento='AJUSTE-HISTORICO').count()
-        )
 
-    return {
+    entradas_por_mes = {
+        row['mes']: row['total']
+        for row in InventarioEntrada.objects.filter(participant__in=membros_ids, data__gte=inicio)
+        .annotate(mes=TruncMonth('data')).values('mes').annotate(total=Count('id')).values('mes', 'total')
+    }
+    saidas_por_mes = {
+        row['mes']: row['total']
+        for row in SaidaManejo.objects.filter(participant__in=membros_ids, data__gte=inicio)
+        .exclude(documento='AJUSTE-HISTORICO')
+        .annotate(mes=TruncMonth('data')).values('mes').annotate(total=Count('id')).values('mes', 'total')
+    }
+
+    entradas_data = [entradas_por_mes.get(date(y, m, 1), 0) for y, m in months]
+    saidas_data = [saidas_por_mes.get(date(y, m, 1), 0) for y, m in months]
+
+    result = {
         'fm_chart_labels': labels,
         'fm_chart_entradas': entradas_data,
         'fm_chart_saidas': saidas_data,
     }
+    cache.set(cache_key, result, 600)  # 10 minutos
+    return result
 
 
 class ManejoDashboardView(FMAccessMixin, TemplateView):
@@ -119,7 +143,7 @@ class ManejoDashboardView(FMAccessMixin, TemplateView):
             propriedades = Propriedade.objects.filter(participant__in=membros_fm, ativa=True)
             entradas = InventarioEntrada.objects.filter(participant__in=membros_fm).select_related(
                 'propriedade', 'especie', 'participant'
-            )
+            ).com_saldo()
 
             total_volume = Decimal('0')
             total_saldo = Decimal('0')
@@ -319,7 +343,7 @@ class InventarioEntradaListView(FMAccessMixin, ListView):
         participant = self.get_participant()
         if not participant:
             return InventarioEntrada.objects.none()
-        return InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie')
+        return InventarioEntrada.objects.filter(participant=participant).select_related('propriedade', 'especie').com_saldo()
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
