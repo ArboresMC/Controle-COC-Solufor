@@ -46,7 +46,7 @@
         <h2 class="card-title">Validar e importar planilha</h2>
         <p class="card-subtitle">Valide a planilha primeiro. Após validação sem erros, confirme para importar.</p>
       </div>
-      <a class="btn secondary" href="{% url 'manejo_import_template' %}">Baixar modelo</a>
+      <a class="btn secondary" id="download-template-btn" href="{% url 'manejo_import_template' %}{% if selected_participant %}?participant={{ selected_participant.id }}{% endif %}">Baixar modelo</a>
     </div>
 
     <form method="post" enctype="multipart/form-data" id="import-form">
@@ -55,12 +55,13 @@
 
       {% if participants %}
       <p style="margin:0 0 6px;font-size:13px;font-weight:700;">Participante</p>
-      <select name="participant_id" style="width:100%;margin-bottom:14px;">
+      <select name="participant_id" id="participant-select" style="width:100%;margin-bottom:14px;">
         <option value="">— Selecione —</option>
         {% for p in participants %}
           <option value="{{ p.id }}" {% if selected_participant and selected_participant.id == p.id %}selected{% endif %}>{{ p }}</option>
         {% endfor %}
       </select>
+      <p class="import-hint" style="margin-top:-10px;">O modelo baixado já vem com a lista de propriedades e espécies deste participante. Selecione-o antes de baixar.</p>
       {% elif selected_participant %}
       <input type="hidden" name="participant_id" value="{{ selected_participant.id }}">
       <p class="muted" style="margin:0 0 14px;">Participante: <strong>{{ selected_participant }}</strong></p>
@@ -172,6 +173,21 @@
           if (label) label.textContent = btn.dataset.busyLabel || 'Importando...';
         });
         confirmNote.classList.add('is-visible');
+      });
+    }
+
+    // Atualiza o link "Baixar modelo" para incluir o participante selecionado
+    // (o modelo agora vem com dropdown das propriedades/espécies desse participante).
+    const participantSelect = document.getElementById('participant-select');
+    const downloadBtn = document.getElementById('download-template-btn');
+    if (participantSelect && downloadBtn) {
+      const baseHref = downloadBtn.getAttribute('href').split('?')[0];
+      participantSelect.addEventListener('change', function () {
+        if (this.value) {
+          downloadBtn.setAttribute('href', baseHref + '?participant=' + this.value);
+        } else {
+          downloadBtn.setAttribute('href', baseHref);
+        }
       });
     }
   })();

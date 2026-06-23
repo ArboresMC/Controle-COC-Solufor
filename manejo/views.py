@@ -683,18 +683,46 @@ class ManejoDataDeleteSingleView(ManejoManagerRequiredMixin, View):
 # IMPORTAÇÃO EM LOTE — Manejo Florestal (Entradas e Saídas via planilha)
 # =============================================================================
 
-class ManejoImportTemplateDownloadView(LoginRequiredMixin, View):
-    """Gera (com cache) o modelo de planilha Excel para importação em lote
-    de Entradas (inventário) e Saídas de Manejo Florestal."""
-    CACHE_KEY = 'import_template_manejo_xlsx_v1'
-    CACHE_TTL = 60 * 60 * 24  # 24 horas
+class ManejoImportTemplateDownloadView(FMAccessMixin, View):
+    """Gera o modelo de planilha Excel para importação em lote de Entradas
+    (inventário) e Saídas de Manejo Florestal — com dropdown nativo do Excel
+    listando as Propriedades e Espécies já cadastradas do participante
+    selecionado (reduz erro de digitação). Cacheado por participante, TTL
+    mais curto que o modelo genérico anterior, já que a lista pode mudar
+    a qualquer momento que o cadastro for atualizado."""
+    CACHE_TTL = 60 * 60  # 1 hora — mais curto que o modelo antigo (24h),
+    # porque o conteúdo agora depende do cadastro do participante, que pode
+    # mudar a qualquer momento (nova propriedade/espécie cadastrada).
 
     def get(self, request, *args, **kwargs):
         from io import BytesIO
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.datavalidation import DataValidation
 
-        cached = cache.get(self.CACHE_KEY)
+        participant = self.get_participant()
+        if not participant:
+            messages.error(request, 'Selecione um participante antes de baixar o modelo.')
+            return redirect('manejo_import_workbook')
+
+        props_nomes = list(Propriedade.objects.filter(participant=participant, ativa=True).order_by('nome').values_list('nome', flat=True))
+        especies_nomes = list(Especie.objects.filter(participant=participant, ativo=True).order_by('nome').values_list('nome', flat=True))
+
+        if not props_nomes or not especies_nomes:
+            faltando = []
+            if not props_nomes:
+                faltando.append('nenhuma Propriedade')
+            if not especies_nomes:
+                faltando.append('nenhuma Espécie')
+            messages.error(
+                request,
+                f'Este participante ainda não tem {" e ".join(faltando)} cadastrada(s). '
+                f'Use o Cadastro em Lote (ou cadastre manualmente) antes de importar volumes.'
+            )
+            return redirect(f"{reverse('manejo_cadastro_import')}?participant={participant.id}")
+
+        cache_key = f'import_template_manejo_xlsx_v2_{participant.id}'
+        cached = cache.get(cache_key)
         if cached:
             response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             response['Content-Disposition'] = 'attachment; filename=modelo_importacao_manejo.xlsx'
@@ -754,22 +782,41 @@ class ManejoImportTemplateDownloadView(LoginRequiredMixin, View):
         wi.column_dimensions['B'].width = 60
 
         title(wi, 1, "MODELO DE IMPORTAÇÃO — MANEJO FLORESTAL", 2)
-        title(wi, 2, "FLUXO DE PREENCHIMENTO", 2, bg="1F7A4D")
-        info(wi, 3, 1, 2, "1. Cadastre Propriedades e Espécies antes",
-             "A planilha NÃO cria propriedades nem espécies novas. Cadastre-as no sistema antes de importar (evita duplicidade e erros de digitação).", COR_INFO)
-        info(wi, 4, 1, 2, "2. Preencha Entradas",
+        title(wi, 2, f"Participante: {participant}", 2, bg="1F7A4D")
+        title(wi, 3, "FLUXO DE PREENCHIMENTO", 2, bg="1F7A4D")
+        info(wi, 4, 1, 2, "1. Use os dropdowns",
+             "As colunas propriedade e especie têm lista suspensa com os cadastros atuais deste participante. Só é possível escolher um valor da lista.", COR_OBRIG)
+        info(wi, 5, 1, 2, "2. Cadastrou algo novo depois de baixar este arquivo?",
+             "Baixe o modelo novamente para atualizar a lista — este arquivo não se atualiza sozinho.", COR_INFO)
+        info(wi, 6, 1, 2, "3. Preencha Entradas",
              "Um inventário por combinação Propriedade + Espécie. Se já existir uma entrada para essa combinação, a importação será bloqueada — edite a entrada existente em vez de duplicar.", COR_OBRIG)
-        info(wi, 5, 1, 2, "3. Preencha Saidas",
-             "Informe Propriedade + Espécie exatamente como cadastradas. O sistema localiza a entrada de inventário correspondente automaticamente e debita o saldo.", COR_OBRIG)
-        info(wi, 6, 1, 2, "4. Saldo insuficiente",
-             "Se o volume da saída for maior que o saldo disponível da propriedade+espécie, a linha é rejeitada com erro — corrija o volume ou a entrada antes de tentar novamente.", COR_INFO)
-        title(wi, 7, "LEGENDA DE CORES", 2, bg="1F7A4D")
-        info(wi, 8, 1, 2, "Verde claro → Obrigatório", "Preencha antes de importar.", COR_OBRIG)
-        info(wi, 9, 1, 2, "Amarelo     → Instrução",   "Leia com atenção antes de preencher.", COR_INFO)
-        title(wi, 10, "UNIDADES ACEITAS", 2, bg="1F7A4D")
-        info(wi, 11, 1, 2, "m3",  "Metro cúbico.")
-        info(wi, 12, 1, 2, "ton", "Tonelada.")
-        info(wi, 13, 1, 2, "st",  "Estéreo (st).")
+        info(wi, 7, 1, 2, "4. Preencha Saidas",
+             "O sistema localiza a entrada de inventário correspondente automaticamente e debita o saldo.", COR_OBRIG)
+        info(wi, 8, 1, 2, "5. Saldo insuficiente",
+             "Se o volume da saída for maior que o saldo disponível, a linha é rejeitada com erro.", COR_INFO)
+        title(wi, 9, "LEGENDA DE CORES", 2, bg="1F7A4D")
+        info(wi, 10, 1, 2, "Verde claro → Obrigatório", "Preencha antes de importar.", COR_OBRIG)
+        info(wi, 11, 1, 2, "Amarelo     → Instrução",   "Leia com atenção antes de preencher.", COR_INFO)
+        title(wi, 12, "UNIDADES ACEITAS", 2, bg="1F7A4D")
+        info(wi, 13, 1, 2, "m3",  "Metro cúbico.")
+        info(wi, 14, 1, 2, "ton", "Tonelada.")
+        info(wi, 15, 1, 2, "st",  "Estéreo (st).")
+
+        # ── Aba auxiliar oculta com as listas (fonte dos dropdowns) ──────
+        aux = wb.create_sheet("_listas")
+        for i, nome in enumerate(props_nomes, 1):
+            aux.cell(row=i, column=1, value=nome)
+        for i, nome in enumerate(especies_nomes, 1):
+            aux.cell(row=i, column=2, value=nome)
+        aux.sheet_state = 'hidden'
+
+        def add_dropdown(ws, col_letter, count, sheet_col_letter, max_row=51):
+            ref = f"_listas!${sheet_col_letter}$1:${sheet_col_letter}${count}"
+            dv = DataValidation(type='list', formula1=ref, allow_blank=True, showErrorMessage=True)
+            dv.error = 'Selecione um valor da lista (já cadastrado no sistema).'
+            dv.errorTitle = 'Valor não cadastrado'
+            ws.add_data_validation(dv)
+            dv.add(f"{col_letter}2:{col_letter}{max_row}")
 
         # ── Entradas ─────────────────────────────────────────────
         we = wb.create_sheet("Entradas")
@@ -780,13 +827,15 @@ class ManejoImportTemplateDownloadView(LoginRequiredMixin, View):
                   ("volume", 14), ("unidade", 12), ("observacoes", 30)]
         for i, (n, w) in enumerate(cols_e, 1):
             hdr(we, 1, i, n, w)
-        ex_e = ["Xadrez", "Pinus taeda", "2026-03-18", "Laudo-001", 282944.77, "m3", "Inventário inicial"]
+        ex_e = [props_nomes[0], especies_nomes[0], "2026-03-18", "Laudo-001", 282944.77, "m3", "Inventário inicial"]
         for i, v in enumerate(ex_e, 1):
             cell(we, 2, i, v, COR_OBRIG)
         for row in range(3, 52):
             we.row_dimensions[row].height = 18
             for col in range(1, 8):
                 cell(we, row, col, None, COR_OBRIG)
+        add_dropdown(we, 'A', len(props_nomes), 'A')
+        add_dropdown(we, 'B', len(especies_nomes), 'B')
 
         # ── Saidas ───────────────────────────────────────────────
         wsai = wb.create_sheet("Saidas")
@@ -795,7 +844,7 @@ class ManejoImportTemplateDownloadView(LoginRequiredMixin, View):
         wsai.row_dimensions[1].height = 34
         wsai.merge_cells('A1:H1')
         c = wsai.cell(row=1, column=1,
-                      value='⚠ propriedade + especie devem ser EXATAMENTE iguais às cadastradas. O sistema localiza a entrada de inventário e debita o saldo automaticamente.')
+                      value='⚠ propriedade + especie têm dropdown com os cadastros atuais. O sistema localiza a entrada de inventário e debita o saldo automaticamente.')
         c.font = Font(bold=True, name='Arial', size=10, color="7B3F00")
         c.fill = PatternFill("solid", fgColor=COR_INFO)
         c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -804,19 +853,21 @@ class ManejoImportTemplateDownloadView(LoginRequiredMixin, View):
                   ("cliente", 26), ("declaracao_fsc", 16), ("volume", 14), ("unidade", 12), ("observacoes", 30)]
         for i, (n, w) in enumerate(cols_s, 1):
             hdr(wsai, 2, i, n, w)
-        ex_s = ["Xadrez", "Pinus taeda", "2026-03-20", "NF-0010", "Tramontina", "Sim", 40, "m3", "Baixa parcial"]
+        ex_s = [props_nomes[0], especies_nomes[0], "2026-03-20", "NF-0010", "Tramontina", "Sim", 40, "m3", "Baixa parcial"]
         for i, v in enumerate(ex_s, 1):
             cell(wsai, 3, i, v, COR_OBRIG)
         for row in range(4, 52):
             wsai.row_dimensions[row].height = 18
             for col in range(1, 10):
                 cell(wsai, row, col, None, COR_OBRIG)
+        add_dropdown(wsai, 'A', len(props_nomes), 'A', max_row=51)
+        add_dropdown(wsai, 'B', len(especies_nomes), 'B', max_row=51)
 
         wb.active = wi
         buffer = BytesIO()
         wb.save(buffer)
         xlsx_bytes = buffer.getvalue()
-        cache.set(self.CACHE_KEY, xlsx_bytes, self.CACHE_TTL)
+        cache.set(cache_key, xlsx_bytes, self.CACHE_TTL)
 
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename=modelo_importacao_manejo.xlsx'
