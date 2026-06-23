@@ -154,6 +154,11 @@ class ManejoDashboardView(FMAccessMixin, TemplateView):
                 key=lambda r: r['nome']
             )
 
+            from django.core.paginator import Paginator
+            page = self.request.GET.get('page', 1)
+            paginator = Paginator(membro_rows, 15)
+            membro_rows_page = paginator.get_page(page)
+
             recent_saidas = SaidaManejo.objects.filter(participant__in=membros_fm).exclude(
                 documento='AJUSTE-HISTORICO'
             ).select_related('entrada__propriedade', 'entrada__especie', 'participant').order_by('-data', '-id')[:10]
@@ -164,7 +169,7 @@ class ManejoDashboardView(FMAccessMixin, TemplateView):
                 'total_propriedades': propriedades.count(),
                 'total_volume': total_volume,
                 'total_saldo': total_saldo,
-                'membro_rows': membro_rows,
+                'membro_rows': membro_rows_page,
                 'recent_saidas': recent_saidas,
             })
             ctx.update(_build_chart_data(membros_fm, date.today()))

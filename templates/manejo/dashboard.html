@@ -83,6 +83,21 @@
       {% endfor %}
     </table>
   </div>
+
+  <!-- Paginação -->
+  {% if membro_rows.has_other_pages %}
+  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;align-items:center;">
+    {% if membro_rows.has_previous %}
+      <a href="?page={{ membro_rows.previous_page_number }}" class="btn secondary" style="font-size:13px;min-height:36px;">← Anterior</a>
+    {% endif %}
+    <span style="font-size:13px;color:var(--muted);padding:0 8px;">
+      Página {{ membro_rows.number }} de {{ membro_rows.paginator.num_pages }}
+    </span>
+    {% if membro_rows.has_next %}
+      <a href="?page={{ membro_rows.next_page_number }}" class="btn secondary" style="font-size:13px;min-height:36px;">Próxima →</a>
+    {% endif %}
+  </div>
+  {% endif %}
   {% else %}
   <div class="empty-state">Nenhuma entrada de inventário registrada ainda no grupo.</div>
   {% endif %}
