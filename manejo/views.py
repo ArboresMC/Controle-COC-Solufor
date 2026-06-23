@@ -949,3 +949,260 @@ class ManejoImportWorkbookView(FMAccessMixin, View):
             validated_token=validated_token, validated_filename=validated_filename,
             selected_participant=participant,
         )
+
+
+# =============================================================================
+# CADASTRO EM LOTE — Propriedades e Espécies (sem dados de movimento)
+# =============================================================================
+
+class ManejoCadastroTemplateDownloadView(LoginRequiredMixin, View):
+    """Gera (com cache) o modelo de planilha para cadastro em lote de
+    Propriedades e Espécies — sem nenhum dado de movimento (volume, data).
+    Útil para participantes com muitas propriedades/espécies novas, que
+    depois usarão esses nomes exatos na planilha de Entradas/Saídas."""
+    CACHE_KEY = 'import_template_manejo_cadastro_xlsx_v1'
+    CACHE_TTL = 60 * 60 * 24  # 24 horas
+
+    def get(self, request, *args, **kwargs):
+        from io import BytesIO
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        cached = cache.get(self.CACHE_KEY)
+        if cached:
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = 'attachment; filename=modelo_cadastro_manejo.xlsx'
+            response.write(cached)
+            return response
+
+        COR_HEADER  = "5B3A1A"
+        COR_OBRIG   = "FBEFE3"
+        COR_INFO    = "FFF8E1"
+        COR_TITULO  = "3D2710"
+        borda = Border(
+            left=Side(style='thin', color='CCCCCC'),
+            right=Side(style='thin', color='CCCCCC'),
+            top=Side(style='thin', color='CCCCCC'),
+            bottom=Side(style='thin', color='CCCCCC'),
+        )
+
+        def hdr(ws, row, col, text, width=18):
+            c = ws.cell(row=row, column=col, value=text)
+            c.font = Font(bold=True, color="FFFFFF", name='Arial', size=10)
+            c.fill = PatternFill("solid", fgColor=COR_HEADER)
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            c.border = borda
+            ws.column_dimensions[get_column_letter(col)].width = width
+
+        def cell(ws, row, col, value=None, bg=COR_OBRIG, italic=False):
+            c = ws.cell(row=row, column=col, value=value)
+            c.fill = PatternFill("solid", fgColor=bg)
+            c.font = Font(italic=italic, name='Arial', size=10)
+            c.alignment = Alignment(vertical='center', wrap_text=True)
+            c.border = borda
+
+        def title(ws, row, text, ncols, bg=COR_TITULO):
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+            c = ws.cell(row=row, column=1, value=text)
+            c.font = Font(bold=True, color="FFFFFF", name='Arial', size=11)
+            c.fill = PatternFill("solid", fgColor=bg)
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[row].height = 28
+
+        def info(ws, row, col1, col2, t, d, bg="FFFFFF"):
+            ws.row_dimensions[row].height = 38
+            for col, val in ((col1, t), (col2, d)):
+                c = ws.cell(row=row, column=col, value=val)
+                c.font = Font(bold=(col == col1), name='Arial', size=10)
+                c.fill = PatternFill("solid", fgColor=bg)
+                c.alignment = Alignment(wrap_text=True, vertical='center')
+                c.border = borda
+
+        wb = openpyxl.Workbook()
+
+        wi = wb.active
+        wi.title = "Leia Antes"
+        wi.sheet_view.showGridLines = False
+        wi.column_dimensions['A'].width = 34
+        wi.column_dimensions['B'].width = 60
+
+        title(wi, 1, "CADASTRO EM LOTE — PROPRIEDADES E ESPÉCIES", 2)
+        title(wi, 2, "PARA QUE SERVE ESTE MODELO", 2, bg="6B4423")
+        info(wi, 3, 1, 2, "Use este modelo quando tiver MUITAS propriedades ou espécies novas",
+             "Cadastre tudo de uma vez aqui. Depois, use os nomes exatos cadastrados na planilha de Entradas/Saídas (menu Importar planilha).", COR_INFO)
+        info(wi, 4, 1, 2, "Este modelo NÃO lança volumes nem movimentos",
+             "Serve só para criar o cadastro (nome, código, município, fatores de conversão). Volumes e datas ficam na outra planilha.", COR_INFO)
+        info(wi, 5, 1, 2, "Já existe? Sem problema",
+             "Se a propriedade ou espécie já estiver cadastrada, a linha é apenas ignorada (não duplica, não dá erro). Pode reenviar a mesma planilha sem medo.", COR_OBRIG)
+        title(wi, 6, "ABA PROPRIEDADES", 2, bg="6B4423")
+        info(wi, 7, 1, 2, "Obrigatório", "nome", COR_OBRIG)
+        info(wi, 8, 1, 2, "Opcional", "codigo (CAR), municipio, uf, area_hectares", COR_INFO)
+        title(wi, 9, "ABA ESPECIES", 2, bg="6B4423")
+        info(wi, 10, 1, 2, "Obrigatório", "nome, fator_ton, fator_st (fatores de conversão de m³ — sem eles a importação dessa linha falha).", COR_OBRIG)
+
+        wp = wb.create_sheet("Propriedades")
+        wp.sheet_view.showGridLines = False
+        wp.freeze_panes = "A2"
+        wp.row_dimensions[1].height = 30
+        cols_p = [("nome", 26), ("codigo", 18), ("municipio", 22), ("uf", 8), ("area_hectares", 16)]
+        for i, (n, w) in enumerate(cols_p, 1):
+            hdr(wp, 1, i, n, w)
+        ex_p = ["Fazenda Santa Rita", "CAR-12345", "Itapeva", "SP", 450.5]
+        for i, v in enumerate(ex_p, 1):
+            cell(wp, 2, i, v, COR_OBRIG if i == 1 else COR_INFO, italic=(i != 1))
+        for row in range(3, 52):
+            wp.row_dimensions[row].height = 18
+            for col in range(1, 6):
+                cell(wp, row, col, None, COR_OBRIG if col == 1 else COR_INFO)
+
+        we = wb.create_sheet("Especies")
+        we.sheet_view.showGridLines = False
+        we.freeze_panes = "A2"
+        we.row_dimensions[1].height = 30
+        cols_e = [("nome", 26), ("fator_ton", 16), ("fator_st", 16)]
+        for i, (n, w) in enumerate(cols_e, 1):
+            hdr(we, 1, i, n, w)
+        ex_e = ["Pinus taeda", 0.85, 1.45]
+        for i, v in enumerate(ex_e, 1):
+            cell(we, 2, i, v, COR_OBRIG)
+        for row in range(3, 52):
+            we.row_dimensions[row].height = 18
+            for col in range(1, 4):
+                cell(we, row, col, None, COR_OBRIG)
+
+        wb.active = wi
+        buffer = BytesIO()
+        wb.save(buffer)
+        xlsx_bytes = buffer.getvalue()
+        cache.set(self.CACHE_KEY, xlsx_bytes, self.CACHE_TTL)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename=modelo_cadastro_manejo.xlsx'
+        response.write(xlsx_bytes)
+        return response
+
+
+class ManejoCadastroImportView(FMAccessMixin, View):
+    """Upload, validação e confirmação de cadastro em lote de Propriedades
+    e Espécies. Mesmo fluxo de duas etapas (validar → confirmar) das
+    outras importações, com chaves de sessão próprias para não colidir
+    com a importação de Entradas/Saídas."""
+    template_name = 'manejo/import_cadastro.html'
+
+    def _render(self, request, preview=None, errors=None, summary=None,
+                validated_token=None, validated_filename=None, selected_participant=None):
+        from reports.services import humanize_import_errors
+        ctx = {
+            'preview': preview or {},
+            'preview_errors': humanize_import_errors(errors or []),
+            'summary': summary or {},
+            'validated_token': validated_token,
+            'validated_filename': validated_filename,
+        }
+        if self.is_multi_scope():
+            ctx['participants'] = self.get_allowed_participants()
+        ctx['selected_participant'] = selected_participant or self.get_participant()
+        return render(request, self.template_name, ctx)
+
+    def get(self, request, *args, **kwargs):
+        return self._render(request)
+
+    def _save_temp_file(self, request, uploaded_file):
+        token = str(uuid.uuid4())
+        uploaded_file.seek(0)
+        content = uploaded_file.read()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', prefix=f'import_cadastro_{token}_')
+        tmp.write(content)
+        tmp.close()
+        session_key = f'import_cadastro_tmp_{token}'
+        request.session[session_key] = {
+            'path': tmp.name,
+            'filename': getattr(uploaded_file, 'name', 'planilha.xlsx'),
+        }
+        return token
+
+    def _load_temp_file(self, request, token):
+        session_key = f'import_cadastro_tmp_{token}'
+        data = request.session.get(session_key)
+        if not data:
+            return None, None
+        path = data.get('path')
+        filename = data.get('filename', 'planilha.xlsx')
+        if not path or not os.path.exists(path):
+            return None, None
+        with open(path, 'rb') as f:
+            content = f.read()
+        return content, filename
+
+    def _cleanup_temp_file(self, request, token):
+        session_key = f'import_cadastro_tmp_{token}'
+        data = request.session.pop(session_key, None)
+        if data and data.get('path'):
+            try:
+                os.unlink(data['path'])
+            except OSError:
+                pass
+
+    def post(self, request, *args, **kwargs):
+        from io import BytesIO
+        from .import_cadastro_services import build_cadastro_import_preview
+        action = request.POST.get('action') or 'validate'
+
+        participant_id = request.POST.get('participant_id') or request.GET.get('participant')
+        if self.is_multi_scope():
+            allowed = self.get_allowed_participants()
+            participant = allowed.filter(pk=participant_id).first() if participant_id else None
+        else:
+            participant = getattr(request.user, 'participant', None)
+
+        if not participant:
+            messages.error(request, 'Selecione um participante de Manejo válido.')
+            return self._render(request)
+
+        if action == 'confirm':
+            token = request.POST.get('validated_token', '')
+            file_bytes, filename = self._load_temp_file(request, token)
+            if not file_bytes:
+                messages.error(request, 'Sessão expirada. Por favor, valide a planilha novamente.')
+                return self._render(request, selected_participant=participant)
+
+            workbook = openpyxl.load_workbook(BytesIO(file_bytes))
+            self._cleanup_temp_file(request, token)
+            summary, errors, preview = build_cadastro_import_preview(workbook, participant, request.user, persist=True)
+            if errors:
+                messages.error(request, 'O cadastro encontrou inconsistências e não foi concluído. Revise a planilha.')
+                return self._render(request, preview=preview, errors=errors, summary=summary, selected_participant=participant)
+            messages.success(
+                request,
+                f"Cadastro concluído. Propriedades novas: {summary.get('propriedades', 0)}, "
+                f"espécies novas: {summary.get('especies', 0)}."
+            )
+            redirect_url = reverse('manejo_import_workbook')
+            if self.is_multi_scope():
+                redirect_url += f'?participant={participant.id}'
+            return redirect(redirect_url)
+
+        uploaded_file = request.FILES.get('workbook')
+        if not uploaded_file:
+            messages.error(request, 'Selecione um arquivo de planilha (.xlsx).')
+            return self._render(request, selected_participant=participant)
+
+        workbook = openpyxl.load_workbook(uploaded_file)
+        summary, errors, preview = build_cadastro_import_preview(workbook, participant, request.user, persist=False)
+
+        validated_token = None
+        validated_filename = None
+        if not errors:
+            validated_token = self._save_temp_file(request, uploaded_file)
+            validated_filename = getattr(uploaded_file, 'name', 'planilha.xlsx')
+
+        if errors:
+            messages.warning(request, f'Validação concluída com {len(errors)} inconsistência(s). Corrija a planilha antes de importar.')
+        else:
+            messages.success(request, 'Validação concluída sem inconsistências. Confirme para cadastrar.')
+
+        return self._render(
+            request, preview=preview, errors=errors, summary=summary,
+            validated_token=validated_token, validated_filename=validated_filename,
+            selected_participant=participant,
+        )

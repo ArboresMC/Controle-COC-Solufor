@@ -26,4 +26,7 @@ urlpatterns = [
 
     path('importar/', views.ManejoImportWorkbookView.as_view(), name='manejo_import_workbook'),
     path('importar/modelo.xlsx', views.ManejoImportTemplateDownloadView.as_view(), name='manejo_import_template'),
+
+    path('cadastro-lote/', views.ManejoCadastroImportView.as_view(), name='manejo_cadastro_import'),
+    path('cadastro-lote/modelo.xlsx', views.ManejoCadastroTemplateDownloadView.as_view(), name='manejo_cadastro_template'),
 ]

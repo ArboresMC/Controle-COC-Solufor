@@ -7,8 +7,10 @@ formatação de erros) e implementa a lógica de negócio própria do Manejo:
 - Saída debita da entrada correspondente a essa mesma combinação
 - Se houver mais de uma entrada para a mesma Propriedade+Espécie, é erro
   (no Manejo deve existir apenas UM inventário consolidado por combinação)
-- Propriedade e Espécie NÃO são criadas automaticamente — devem já existir
-  no cadastro do participante; planilha que referencia uma inexistente gera erro
+- Propriedade e Espécie NÃO são criadas automaticamente aqui — devem já
+  existir no cadastro do participante. Para cadastrar várias de uma vez,
+  use o modelo de Cadastro em Lote (manejo/import_cadastro_services.py),
+  que cria apenas Propriedades e Espécies, sem nenhum dado de movimento.
 """
 from decimal import Decimal
 
@@ -35,7 +37,7 @@ def count_manejo_workbook_rows(workbook):
     return total
 
 
-def _get_propriedade(participant, nome, *, errors_field='propriedade'):
+def _get_propriedade(participant, nome):
     nome = safe_str(nome)
     if not nome:
         raise ValueError('Propriedade não informada.')
@@ -43,7 +45,7 @@ def _get_propriedade(participant, nome, *, errors_field='propriedade'):
     if propriedade is None:
         raise ValueError(
             f'Propriedade "{nome}" não encontrada para este participante. '
-            f'Cadastre a propriedade antes de importar.'
+            f'Cadastre a propriedade antes de importar (manualmente ou via modelo de Cadastro em Lote).'
         )
     return propriedade
 
@@ -56,7 +58,7 @@ def _get_especie(participant, nome):
     if especie is None:
         raise ValueError(
             f'Espécie "{nome}" não encontrada para este participante. '
-            f'Cadastre a espécie antes de importar.'
+            f'Cadastre a espécie antes de importar (manualmente ou via modelo de Cadastro em Lote).'
         )
     return especie
 
