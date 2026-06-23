@@ -5,7 +5,8 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, ListView, TemplateView, UpdateView
+from django.views.generic import CreateView, ListView, TemplateView, UpdateView, View
+from django.db import connection
 
 from .forms import EspecieForm, PropriedadeForm, InventarioEntradaForm, SaidaManejoForm
 from .models import Especie, Propriedade, InventarioEntrada, SaidaManejo
@@ -33,6 +34,17 @@ class FMAccessMixin(LoginRequiredMixin):
                 return Participant.objects.filter(pk=participant_id, ativo_fm=True).first()
             return None
         return getattr(user, 'participant', None)
+
+
+class ManejoManagerRequiredMixin(LoginRequiredMixin):
+    """Restringe acesso a telas administrativas do Manejo (gestão de dados,
+    inativação de propriedades) apenas a gestores/auditores."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.is_authenticated and (request.user.is_manager or request.user.is_auditor)):
+            messages.error(request, 'Apenas o gestor pode acessar esta área.')
+            return redirect('manejo_dashboard')
+        return super().dispatch(request, *args, **kwargs)
 
 
 def _build_participant_context(participant):
@@ -410,3 +422,203 @@ class SaidaManejoCreateView(FMAccessMixin, CreateView):
     def form_valid(self, form):
         messages.success(self.request, 'Saída registrada com sucesso.')
         return super().form_valid(form)
+
+
+# =============================================================================
+# GESTÃO DE DADOS — Manejo Florestal (apenas gestor)
+# =============================================================================
+
+def _delete_entradas_sql(entrada_ids):
+    """Exclui InventarioEntrada e, antes, as SaidaManejo vinculadas
+    (entrada.PROTECT exige isso). Coleta os IDs dependentes antes de
+    deletar, na mesma lógica já usada em transactions._delete_entries_sql."""
+    if not entrada_ids:
+        return 0, 0
+    ids = list(entrada_ids)
+    fmt = ','.join(['%s'] * len(ids))
+    with connection.cursor() as c:
+        c.execute(f"SELECT id FROM manejo_saidamanejo WHERE entrada_id IN ({fmt})", ids)
+        saida_ids = [row[0] for row in c.fetchall()]
+
+        if saida_ids:
+            sfmt = ','.join(['%s'] * len(saida_ids))
+            c.execute(f"DELETE FROM manejo_saidamanejo WHERE id IN ({sfmt})", saida_ids)
+
+        c.execute(f"DELETE FROM manejo_inventarioentrada WHERE id IN ({fmt})", ids)
+
+    return len(ids), len(saida_ids)
+
+
+def _delete_saidas_sql(saida_ids):
+    """Exclui SaidaManejo. Não há dependentes (nada referencia SaidaManejo via FK)."""
+    if not saida_ids:
+        return 0
+    ids = list(saida_ids)
+    fmt = ','.join(['%s'] * len(ids))
+    with connection.cursor() as c:
+        c.execute(f"DELETE FROM manejo_saidamanejo WHERE id IN ({fmt})", ids)
+    return len(ids)
+
+
+class ManejoDataManagementView(ManejoManagerRequiredMixin, TemplateView):
+    template_name = 'manejo/data_management.html'
+
+    def get_context_data(self, **kwargs):
+        from django.core.paginator import Paginator
+        from participants.models import Participant
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        current_org = getattr(user, 'current_organization', None)
+
+        participant_id = self.request.GET.get('participant')
+        record_type = self.request.GET.get('type', 'propriedades')
+        date_from = self.request.GET.get('date_from', '')
+        date_to = self.request.GET.get('date_to', '')
+        page = self.request.GET.get('page', 1)
+
+        participants = Participant.objects.filter(
+            ativo_fm=True, status='active', organization=current_org
+        ).order_by('trade_name', 'legal_name') if current_org else Participant.objects.none()
+
+        selected_participant = participants.filter(pk=participant_id).first() if participant_id else None
+
+        records_page = None
+        total_count = 0
+        if selected_participant:
+            records_qs = None
+            if record_type == 'propriedades':
+                records_qs = Propriedade.objects.filter(
+                    participant=selected_participant, ativa=True
+                ).order_by('nome')
+            elif record_type == 'entradas':
+                records_qs = InventarioEntrada.objects.filter(
+                    participant=selected_participant
+                ).select_related('propriedade', 'especie').com_saldo().order_by('-data', '-id')
+            elif record_type == 'saidas':
+                records_qs = SaidaManejo.objects.filter(
+                    participant=selected_participant
+                ).select_related('entrada__propriedade', 'entrada__especie').order_by('-data', '-id')
+
+            if records_qs is not None:
+                if record_type in ('entradas', 'saidas'):
+                    if date_from:
+                        try:
+                            from datetime import datetime
+                            records_qs = records_qs.filter(data__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
+                        except ValueError:
+                            pass
+                    if date_to:
+                        try:
+                            from datetime import datetime
+                            records_qs = records_qs.filter(data__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
+                        except ValueError:
+                            pass
+
+                total_count = records_qs.count()
+                paginator = Paginator(records_qs, 50)
+                records_page = paginator.get_page(page)
+
+        ctx.update({
+            'participants': participants,
+            'selected_participant': selected_participant,
+            'record_type': record_type,
+            'records': records_page,
+            'total_count': total_count,
+            'date_from': date_from,
+            'date_to': date_to,
+        })
+        return ctx
+
+
+class ManejoDataDeactivateView(ManejoManagerRequiredMixin, View):
+    """Inativa (não exclui) Propriedade(s) — individual ou em lote.
+    Propriedade tem on_delete=PROTECT a partir de InventarioEntrada,
+    então exclusão de verdade quebraria o histórico FSC; inativar é o
+    caminho correto para "encerrar" uma área sem perder rastreabilidade."""
+
+    def post(self, request, *args, **kwargs):
+        participant_id = request.POST.get('participant_id')
+        action = request.POST.get('action')
+
+        if action == 'deactivate_selected':
+            selected_ids = request.POST.getlist('selected_ids')
+            ids = [int(i) for i in selected_ids if i.isdigit()]
+            if not ids:
+                messages.warning(request, 'Nenhuma propriedade selecionada.')
+            else:
+                count = Propriedade.objects.filter(pk__in=ids).update(ativa=False)
+                messages.success(request, f'{count} propriedade(s) inativada(s) com sucesso.')
+
+        elif action == 'deactivate_single':
+            record_id = request.POST.get('record_id')
+            if record_id and record_id.isdigit():
+                updated = Propriedade.objects.filter(pk=int(record_id)).update(ativa=False)
+                if updated:
+                    messages.success(request, 'Propriedade inativada com sucesso.')
+                else:
+                    messages.error(request, 'Propriedade não encontrada.')
+
+        return redirect(f'/manejo/gestor/dados/?participant={participant_id}&type=propriedades')
+
+
+class ManejoDataDeleteView(ManejoManagerRequiredMixin, View):
+    """Exclusão (em lote ou total) de Entradas de Inventário ou Saídas de Manejo."""
+
+    def post(self, request, *args, **kwargs):
+        record_type = request.POST.get('record_type')
+        participant_id = request.POST.get('participant_id')
+        action = request.POST.get('action')
+
+        from participants.models import Participant
+        participant = Participant.objects.filter(pk=participant_id, ativo_fm=True).first() if participant_id else None
+        if not participant:
+            messages.error(request, 'Participante não encontrado.')
+            return redirect('manejo_data_management')
+
+        if action == 'delete_selected':
+            selected_ids = request.POST.getlist('selected_ids')
+            ids = [int(i) for i in selected_ids if i.isdigit()]
+            if not ids:
+                messages.warning(request, 'Nenhum registro selecionado.')
+            elif record_type == 'entradas':
+                count, saidas_count = _delete_entradas_sql(ids)
+                extra = f' (e {saidas_count} saída(s) vinculada(s))' if saidas_count else ''
+                messages.success(request, f'{count} entrada(s) excluída(s) com sucesso{extra}.')
+            elif record_type == 'saidas':
+                count = _delete_saidas_sql(ids)
+                messages.success(request, f'{count} saída(s) excluída(s) com sucesso.')
+
+        elif action == 'delete_all':
+            if record_type == 'entradas':
+                ids = list(InventarioEntrada.objects.filter(participant=participant).values_list('id', flat=True))
+                count, saidas_count = _delete_entradas_sql(ids)
+                extra = f' (e {saidas_count} saída(s) vinculada(s))' if saidas_count else ''
+                messages.success(request, f'Todas as {count} entradas de {participant} foram excluídas{extra}.')
+            elif record_type == 'saidas':
+                ids = list(SaidaManejo.objects.filter(participant=participant).values_list('id', flat=True))
+                count = _delete_saidas_sql(ids)
+                messages.success(request, f'Todas as {count} saídas de {participant} foram excluídas.')
+
+        return redirect(f'/manejo/gestor/dados/?participant={participant_id}&type={record_type}')
+
+
+class ManejoDataDeleteSingleView(ManejoManagerRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        record_type = request.POST.get('record_type')
+        record_id = request.POST.get('record_id')
+        participant_id = request.POST.get('participant_id')
+
+        if not record_id or not record_id.isdigit():
+            messages.error(request, 'Registro inválido.')
+            return redirect('manejo_data_management')
+
+        rid = int(record_id)
+        if record_type == 'entradas':
+            count, saidas_count = _delete_entradas_sql([rid])
+            extra = f' (e {saidas_count} saída(s) vinculada(s))' if saidas_count else ''
+            messages.success(request, f'Entrada excluída com sucesso{extra}.')
+        elif record_type == 'saidas':
+            _delete_saidas_sql([rid])
+            messages.success(request, 'Saída excluída com sucesso.')
+
+        return redirect(f'/manejo/gestor/dados/?participant={participant_id}&type={record_type}')

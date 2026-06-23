@@ -18,4 +18,9 @@ urlpatterns = [
 
     path('saidas/', views.SaidaManejoListView.as_view(), name='manejo_saida_list'),
     path('saidas/nova/', views.SaidaManejoCreateView.as_view(), name='manejo_saida_create'),
+
+    path('gestor/dados/', views.ManejoDataManagementView.as_view(), name='manejo_data_management'),
+    path('gestor/dados/inativar/', views.ManejoDataDeactivateView.as_view(), name='manejo_data_deactivate'),
+    path('gestor/dados/excluir/', views.ManejoDataDeleteView.as_view(), name='manejo_data_delete'),
+    path('gestor/dados/excluir/unico/', views.ManejoDataDeleteSingleView.as_view(), name='manejo_data_delete_single'),
 ]
