@@ -827,7 +827,7 @@ class ManejoImportTemplateDownloadView(FMAccessMixin, View):
                   ("volume", 14), ("unidade", 12), ("observacoes", 30)]
         for i, (n, w) in enumerate(cols_e, 1):
             hdr(we, 1, i, n, w)
-        ex_e = [props_nomes[0], especies_nomes[0], "2026-03-18", "Laudo-001", 282944.77, "m3", "Inventário inicial"]
+        ex_e = [props_nomes[0], especies_nomes[0], "2026-03-18", "[EXEMPLO] apague esta linha", 282944.77, "m3", "Inventário inicial — apague esta linha antes de importar"]
         for i, v in enumerate(ex_e, 1):
             cell(we, 2, i, v, COR_OBRIG)
         for row in range(3, 52):
@@ -853,7 +853,7 @@ class ManejoImportTemplateDownloadView(FMAccessMixin, View):
                   ("cliente", 26), ("declaracao_fsc", 16), ("volume", 14), ("unidade", 12), ("observacoes", 30)]
         for i, (n, w) in enumerate(cols_s, 1):
             hdr(wsai, 2, i, n, w)
-        ex_s = [props_nomes[0], especies_nomes[0], "2026-03-20", "NF-0010", "Tramontina", "Sim", 40, "m3", "Baixa parcial"]
+        ex_s = [props_nomes[0], especies_nomes[0], "2026-03-20", "[EXEMPLO] apague esta linha", "Tramontina", "Sim", 40, "m3", "Baixa parcial — apague esta linha antes de importar"]
         for i, v in enumerate(ex_s, 1):
             cell(wsai, 3, i, v, COR_OBRIG)
         for row in range(4, 52):

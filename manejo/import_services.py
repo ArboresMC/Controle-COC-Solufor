@@ -90,12 +90,23 @@ def _find_entrada_unica(participant, propriedade, especie):
     return entradas[0]
 
 
+def _eh_linha_exemplo(row):
+    """Detecta a linha de exemplo deixada no modelo Excel (marcada com
+    '[EXEMPLO]' no campo documento) para que ela seja ignorada silenciosamente
+    se o usuário esquecer de apagá-la — evita que o exemplo seja importado
+    como um registro real (entrada ou saída fantasma)."""
+    documento = safe_str(first_present(row, 'documento'))
+    return documento.upper().startswith('[EXEMPLO]')
+
+
 def build_manejo_import_preview(workbook, participant, user, persist=False):
     """
     Processa a planilha de Manejo em duas fases quando persist=True:
       Fase 1 — Entradas: grava todos os inventários.
       Fase 2 — Saídas: agora encontram as entradas da fase 1 (ou já existentes).
     No modo preview (persist=False) tudo roda sem gravar, apenas validando.
+    Linhas marcadas como exemplo ('[EXEMPLO]' no documento) são ignoradas
+    silenciosamente, mesmo que o usuário não as apague.
     """
     summary = {'entradas': 0, 'saidas': 0}
     errors = []
@@ -104,6 +115,8 @@ def build_manejo_import_preview(workbook, participant, user, persist=False):
     if 'Entradas' in workbook.sheetnames:
         sheet = workbook['Entradas']
         for idx, row in sheet_rows(sheet):
+            if _eh_linha_exemplo(row):
+                continue
             try:
                 data = first_present(row, 'data')
                 if not data:
@@ -168,6 +181,8 @@ def build_manejo_import_preview(workbook, participant, user, persist=False):
     if 'Saidas' in workbook.sheetnames:
         sheet = workbook['Saidas']
         for idx, row in sheet_rows(sheet):
+            if _eh_linha_exemplo(row):
+                continue
             try:
                 data = first_present(row, 'data')
                 if not data:
