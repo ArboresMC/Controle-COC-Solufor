@@ -19,19 +19,41 @@ class FMAccessMixin(LoginRequiredMixin):
         user = request.user
         if user.is_manager or user.is_auditor:
             return super().dispatch(request, *args, **kwargs)
+        if user.is_manejo_multi:
+            return super().dispatch(request, *args, **kwargs)
         participant = getattr(user, 'participant', None)
         if not participant or not participant.ativo_fm:
             messages.error(request, 'Seu cadastro não tem acesso ao módulo de Manejo Florestal.')
             return redirect('dashboard')
         return super().dispatch(request, *args, **kwargs)
 
-    def get_participant(self):
+    def is_multi_scope(self):
+        """True quando o usuário pode operar mais de um participante FM
+        (gestor/auditor veem o grupo inteiro; o 'mini-gestor' vê só os seus)."""
+        user = self.request.user
+        return user.is_manager or user.is_auditor or user.is_manejo_multi
+
+    def get_allowed_participants(self):
+        """Queryset de participantes FM que este usuário pode escolher/ver.
+        Gestor/auditor: todo o grupo. Mini-gestor: só os seus. Participante
+        comum: não usa este método (tem participante único e fixo)."""
+        from participants.models import Participant
         user = self.request.user
         if user.is_manager or user.is_auditor:
+            return Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        if user.is_manejo_multi:
+            return Participant.objects.filter(
+                id__in=user.manejo_participant_ids(), status='active'
+            ).order_by('trade_name')
+        return Participant.objects.none()
+
+    def get_participant(self):
+        user = self.request.user
+        if self.is_multi_scope():
             participant_id = self.request.GET.get('participant')
             if participant_id:
-                from participants.models import Participant
-                return Participant.objects.filter(pk=participant_id, ativo_fm=True).first()
+                allowed = self.get_allowed_participants()
+                return allowed.filter(pk=participant_id).first()
             return None
         return getattr(user, 'participant', None)
 
@@ -136,10 +158,76 @@ def _build_chart_data(membros_qs, today):
     return result
 
 
+def _build_aggregate_context(membros_fm, request):
+    """Monta o contexto agregado (totais + saldo por membro + gráfico) para
+    um conjunto de participantes FM. Usado tanto pelo gestor (todos os
+    membros do grupo) quanto pelo mini-gestor (só os participantes que ele
+    opera)."""
+    propriedades = Propriedade.objects.filter(participant__in=membros_fm, ativa=True)
+    entradas = InventarioEntrada.objects.filter(participant__in=membros_fm).select_related(
+        'propriedade', 'especie', 'participant'
+    ).com_saldo()
+
+    total_volume = Decimal('0')
+    total_saldo = Decimal('0')
+    por_membro = {}
+    for entrada in entradas:
+        saldo = entrada.saldo_disponivel_m3
+        total_volume += entrada.volume_m3
+        total_saldo += saldo
+        pid = entrada.participant_id
+        if pid not in por_membro:
+            por_membro[pid] = {
+                'nome': str(entrada.participant),
+                'volume': Decimal('0'),
+                'saldo': Decimal('0'),
+                'propriedades': set(),
+            }
+        por_membro[pid]['volume'] += entrada.volume_m3
+        por_membro[pid]['saldo'] += saldo
+        por_membro[pid]['propriedades'].add(entrada.propriedade_id)
+
+    membro_rows = sorted(
+        [
+            {
+                'participant_id': pid,
+                'nome': info['nome'],
+                'propriedades_count': len(info['propriedades']),
+                'volume': info['volume'],
+                'saldo': info['saldo'],
+            }
+            for pid, info in por_membro.items()
+        ],
+        key=lambda r: r['nome']
+    )
+
+    from django.core.paginator import Paginator
+    page = request.GET.get('page', 1)
+    paginator = Paginator(membro_rows, 15)
+    membro_rows_page = paginator.get_page(page)
+
+    recent_saidas = SaidaManejo.objects.filter(participant__in=membros_fm).exclude(
+        documento='AJUSTE-HISTORICO'
+    ).select_related('entrada__propriedade', 'entrada__especie', 'participant').order_by('-data', '-id')[:10]
+
+    ctx = {
+        'is_aggregate': True,
+        'total_membros': membros_fm.count() if hasattr(membros_fm, 'count') else len(membros_fm),
+        'total_propriedades': propriedades.count(),
+        'total_volume': total_volume,
+        'total_saldo': total_saldo,
+        'membro_rows': membro_rows_page,
+        'recent_saidas': recent_saidas,
+    }
+    ctx.update(_build_chart_data(membros_fm, date.today()))
+    return ctx
+
+
 class ManejoDashboardView(FMAccessMixin, TemplateView):
     """Painel principal de Manejo Florestal.
-    Gestor/auditor: visão agregada de TODOS os membros FM.
-    Participante: visão direta dos seus próprios dados (sem agregação)."""
+    Gestor/auditor: visão agregada de TODOS os membros FM do grupo.
+    Mini-gestor (multi-participante): visão agregada SÓ dos participantes que ele opera.
+    Participante comum: visão direta dos seus próprios dados (sem agregação)."""
     template_name = 'manejo/dashboard.html'
 
     def get_context_data(self, **kwargs):
@@ -151,67 +239,17 @@ class ManejoDashboardView(FMAccessMixin, TemplateView):
             current_org = getattr(user, 'current_organization', None)
             membros_fm = Participant.objects.filter(ativo_fm=True, status='active')
             membros_fm = membros_fm.filter(organization=current_org) if current_org else Participant.objects.none()
-
-            propriedades = Propriedade.objects.filter(participant__in=membros_fm, ativa=True)
-            entradas = InventarioEntrada.objects.filter(participant__in=membros_fm).select_related(
-                'propriedade', 'especie', 'participant'
-            ).com_saldo()
-
-            total_volume = Decimal('0')
-            total_saldo = Decimal('0')
-            por_membro = {}
-            for entrada in entradas:
-                saldo = entrada.saldo_disponivel_m3
-                total_volume += entrada.volume_m3
-                total_saldo += saldo
-                pid = entrada.participant_id
-                if pid not in por_membro:
-                    por_membro[pid] = {
-                        'nome': str(entrada.participant),
-                        'volume': Decimal('0'),
-                        'saldo': Decimal('0'),
-                        'propriedades': set(),
-                    }
-                por_membro[pid]['volume'] += entrada.volume_m3
-                por_membro[pid]['saldo'] += saldo
-                por_membro[pid]['propriedades'].add(entrada.propriedade_id)
-
-            membro_rows = sorted(
-                [
-                    {
-                        'participant_id': pid,
-                        'nome': info['nome'],
-                        'propriedades_count': len(info['propriedades']),
-                        'volume': info['volume'],
-                        'saldo': info['saldo'],
-                    }
-                    for pid, info in por_membro.items()
-                ],
-                key=lambda r: r['nome']
-            )
-
-            from django.core.paginator import Paginator
-            page = self.request.GET.get('page', 1)
-            paginator = Paginator(membro_rows, 15)
-            membro_rows_page = paginator.get_page(page)
-
-            recent_saidas = SaidaManejo.objects.filter(participant__in=membros_fm).exclude(
-                documento='AJUSTE-HISTORICO'
-            ).select_related('entrada__propriedade', 'entrada__especie', 'participant').order_by('-data', '-id')[:10]
-
-            ctx.update({
-                'is_aggregate': True,
-                'total_membros': membros_fm.count(),
-                'total_propriedades': propriedades.count(),
-                'total_volume': total_volume,
-                'total_saldo': total_saldo,
-                'membro_rows': membro_rows_page,
-                'recent_saidas': recent_saidas,
-            })
-            ctx.update(_build_chart_data(membros_fm, date.today()))
+            ctx.update(_build_aggregate_context(membros_fm, self.request))
             return ctx
 
-        # Participante: mostra direto os próprios dados, sem agregação
+        if user.is_manejo_multi:
+            from participants.models import Participant
+            membros_fm = Participant.objects.filter(id__in=user.manejo_participant_ids(), status='active')
+            ctx['is_mini_gestor'] = True
+            ctx.update(_build_aggregate_context(membros_fm, self.request))
+            return ctx
+
+        # Participante comum: mostra direto os próprios dados, sem agregação
         participant = getattr(user, 'participant', None)
         ctx['is_aggregate'] = False
         if not participant or not participant.ativo_fm:
@@ -226,16 +264,16 @@ class ManejoDashboardView(FMAccessMixin, TemplateView):
 
 class ManejoParticipantDashboardView(FMAccessMixin, TemplateView):
     """Visão detalhada de UM participante FM específico — usada pelo gestor
-    para 'entrar' em um membro a partir do painel agregado."""
+    e pelo mini-gestor (multi-participante) para 'entrar' em um membro a
+    partir do painel agregado."""
     template_name = 'manejo/participante_dashboard.html'
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
 
-        if user.is_manager or user.is_auditor:
-            from participants.models import Participant
-            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        if self.is_multi_scope():
+            ctx['participants'] = self.get_allowed_participants()
             participant = self.get_participant()
             ctx['selected_participant'] = participant
             if not participant:
@@ -262,10 +300,8 @@ class EspecieListView(FMAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        user = self.request.user
-        if user.is_manager or user.is_auditor:
-            from participants.models import Participant
-            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        if self.is_multi_scope():
+            ctx['participants'] = self.get_allowed_participants()
         ctx['selected_participant'] = self.get_participant()
         return ctx
 
@@ -295,6 +331,8 @@ class EspecieUpdateView(FMAccessMixin, UpdateView):
             current_org = getattr(user, 'current_organization', None)
             membros_org = Participant.objects.filter(organization=current_org) if current_org else Participant.objects.none()
             return Especie.objects.filter(participant__in=membros_org)
+        if user.is_manejo_multi:
+            return Especie.objects.filter(participant_id__in=user.manejo_participant_ids())
         return Especie.objects.filter(participant=self.get_participant())
 
     def form_valid(self, form):
@@ -316,10 +354,8 @@ class PropriedadeListView(FMAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        user = self.request.user
-        if user.is_manager or user.is_auditor:
-            from participants.models import Participant
-            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        if self.is_multi_scope():
+            ctx['participants'] = self.get_allowed_participants()
         ctx['selected_participant'] = self.get_participant()
         return ctx
 
@@ -351,6 +387,8 @@ class PropriedadeUpdateView(FMAccessMixin, UpdateView):
             current_org = getattr(user, 'current_organization', None)
             membros_org = Participant.objects.filter(organization=current_org) if current_org else Participant.objects.none()
             return Propriedade.objects.filter(participant__in=membros_org)
+        if user.is_manejo_multi:
+            return Propriedade.objects.filter(participant_id__in=user.manejo_participant_ids())
         return Propriedade.objects.filter(participant=self.get_participant())
 
     def form_valid(self, form):
@@ -373,10 +411,8 @@ class InventarioEntradaListView(FMAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        user = self.request.user
-        if user.is_manager or user.is_auditor:
-            from participants.models import Participant
-            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        if self.is_multi_scope():
+            ctx['participants'] = self.get_allowed_participants()
         ctx['selected_participant'] = self.get_participant()
         return ctx
 
@@ -414,10 +450,8 @@ class SaidaManejoListView(FMAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        user = self.request.user
-        if user.is_manager or user.is_auditor:
-            from participants.models import Participant
-            ctx['participants'] = Participant.objects.filter(ativo_fm=True, status='active').order_by('trade_name')
+        if self.is_multi_scope():
+            ctx['participants'] = self.get_allowed_participants()
         ctx['selected_participant'] = self.get_participant()
         return ctx
 
