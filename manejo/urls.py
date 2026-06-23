@@ -23,4 +23,7 @@ urlpatterns = [
     path('gestor/dados/inativar/', views.ManejoDataDeactivateView.as_view(), name='manejo_data_deactivate'),
     path('gestor/dados/excluir/', views.ManejoDataDeleteView.as_view(), name='manejo_data_delete'),
     path('gestor/dados/excluir/unico/', views.ManejoDataDeleteSingleView.as_view(), name='manejo_data_delete_single'),
+
+    path('importar/', views.ManejoImportWorkbookView.as_view(), name='manejo_import_workbook'),
+    path('importar/modelo.xlsx', views.ManejoImportTemplateDownloadView.as_view(), name='manejo_import_template'),
 ]
