@@ -64,7 +64,7 @@ class Command(BaseCommand):
         manager, created = User.objects.get_or_create(
             username='gestor',
             defaults={
-                'email': 'gestor@portal-fsc.local',
+                'email': 'gestor@traceflor.local',
                 'role': 'manager',
                 'is_staff': True,
                 'is_superuser': True,
@@ -77,7 +77,7 @@ class Command(BaseCommand):
         participant_user, created = User.objects.get_or_create(
             username='participante',
             defaults={
-                'email': 'participante@portal-fsc.local',
+                'email': 'participante@traceflor.local',
                 'role': 'participant',
                 'participant': participant,
                 'is_staff': False,
@@ -93,7 +93,7 @@ class Command(BaseCommand):
         auditor, created = User.objects.get_or_create(
             username='auditor',
             defaults={
-                'email': 'auditor@portal-fsc.local',
+                'email': 'auditor@traceflor.local',
                 'role': 'auditor',
                 'is_staff': False,
             },

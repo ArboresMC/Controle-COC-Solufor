@@ -6,8 +6,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,testserver,portal-fsc.onrender.com,.onrender.com').split(',') if h.strip()]
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', 'https://portal-fsc.onrender.com').split(',') if o.strip()]
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,testserver,traceflor.onrender.com,.onrender.com').split(',') if h.strip()]
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', 'https://traceflor.onrender.com').split(',') if o.strip()]
 CUSTOM_DOMAIN = os.getenv('CUSTOM_DOMAIN', '').strip()
 if CUSTOM_DOMAIN and CUSTOM_DOMAIN not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(CUSTOM_DOMAIN)
@@ -15,7 +15,7 @@ if CUSTOM_DOMAIN:
     origin = f"https://{CUSTOM_DOMAIN}"
     if origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(origin)
-APP_BASE_URL = os.getenv('APP_BASE_URL', f"https://{CUSTOM_DOMAIN}" if CUSTOM_DOMAIN else 'https://portal-fsc.onrender.com')
+APP_BASE_URL = os.getenv('APP_BASE_URL', f"https://{CUSTOM_DOMAIN}" if CUSTOM_DOMAIN else 'https://traceflor.onrender.com')
 
 
 IMPORT_MODE = os.getenv('IMPORT_MODE', 'async' if DEBUG else 'sync').strip().lower()
@@ -80,7 +80,7 @@ elif DB_ENGINE == 'postgres':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'fsc_portal'),
+            'NAME': os.getenv('DB_NAME', 'traceflor_portal'),
             'USER': os.getenv('DB_USER', 'postgres'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
             'HOST': os.getenv('DB_HOST', 'localhost'),
@@ -170,7 +170,7 @@ CACHE_TTL_TRACEABILITY = int(os.getenv('CACHE_TTL_TRACEABILITY', '120'))
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'portal-fsc-cache',
+        'LOCATION': 'portal-traceflor-cache',
         'TIMEOUT': int(os.getenv('CACHE_DEFAULT_TIMEOUT', '300')),
         'OPTIONS': {
             'MAX_ENTRIES': int(os.getenv('CACHE_MAX_ENTRIES', '2000')),
