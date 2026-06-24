@@ -8,13 +8,18 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,testserver,traceflor.onrender.com,.onrender.com').split(',') if h.strip()]
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', 'https://traceflor.onrender.com').split(',') if o.strip()]
-CUSTOM_DOMAIN = os.getenv('CUSTOM_DOMAIN', '').strip()
-if CUSTOM_DOMAIN and CUSTOM_DOMAIN not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(CUSTOM_DOMAIN)
-if CUSTOM_DOMAIN:
-    origin = f"https://{CUSTOM_DOMAIN}"
-    if origin not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append(origin)
+
+# CUSTOM_DOMAIN aceita um ou mais domínios separados por vírgula, ex:
+# CUSTOM_DOMAIN=traceflor.com.br,www.traceflor.com.br
+# O primeiro domínio da lista é considerado o "principal" e é usado em APP_BASE_URL.
+CUSTOM_DOMAINS = [d.strip() for d in os.getenv('CUSTOM_DOMAIN', '').split(',') if d.strip()]
+CUSTOM_DOMAIN = CUSTOM_DOMAINS[0] if CUSTOM_DOMAINS else ''  # mantido por compatibilidade com código existente
+for _domain in CUSTOM_DOMAINS:
+    if _domain not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_domain)
+    _origin = f"https://{_domain}"
+    if _origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_origin)
 APP_BASE_URL = os.getenv('APP_BASE_URL', f"https://{CUSTOM_DOMAIN}" if CUSTOM_DOMAIN else 'https://traceflor.onrender.com')
 
 
