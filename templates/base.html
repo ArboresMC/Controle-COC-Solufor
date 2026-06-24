@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load static %}
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
@@ -382,6 +383,9 @@ input[type='checkbox'] { width: auto; }
           {% if user.is_authenticated %}
           <button id="mobileSidebarToggle" class="topbar-mobile-toggle" type="button" aria-label="Abrir menu">☰</button>
           {% endif %}
+          <span style="background:#ffffff; border-radius:8px; padding:4px 8px; display:inline-flex; align-items:center; flex-shrink:0;">
+            <img src="{% static 'img/solufor-logo.png' %}" alt="Solufor" style="height:28px; width:auto; display:block;">
+          </span>
           <span class="topbar-copy">
             <strong>Solufor Soluções Florestais</strong>
             <span>Controle operacional de cadeia de custódia, conversões, rastreabilidade e saldo elegível</span>
