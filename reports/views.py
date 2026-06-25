@@ -115,8 +115,8 @@ class AuditPdfReportView(ManagerRequiredMixin, View):
         doc = SimpleDocTemplate(response, pagesize=landscape(A4), leftMargin=24, rightMargin=24, topMargin=24, bottomMargin=24)
         styles = getSampleStyleSheet()
         story = [
-            Paragraph('Solufor Soluções Florestais', styles['Title']),
-            Paragraph('Relatório de auditoria FSC — rastreabilidade e saldo por entrada', styles['Heading2']),
+            Paragraph('TraceFlor', styles['Title']),
+            Paragraph('Relatório de auditoria — rastreabilidade e saldo por entrada', styles['Heading2']),
             Spacer(1, 12),
         ]
         if participant:
