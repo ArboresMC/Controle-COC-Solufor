@@ -113,6 +113,16 @@ a:hover { text-decoration: underline; }
 .userbox strong { display:block; font-size: 14px; }
 .userbox span, .userbox a { color: var(--muted); font-size: 12px; }
 .page { max-width: 1280px; margin: 0 auto; padding: 24px; width:100%; }
+.app-footer {
+  background: var(--primary-2);
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.app-footer-logo { height: 22px; width: auto; display: block; opacity: .92; }
+.app-footer-year { color: rgba(255,255,255,.6); font-size: 12px; letter-spacing: .03em; }
 .hero {
   background: linear-gradient(135deg, #0C4943 0%, #14776D 100%);
   color: white; border-radius: 26px; padding: 28px 30px; box-shadow: var(--shadow);
@@ -388,7 +398,7 @@ input[type='checkbox'] { width: auto; }
           <button id="mobileSidebarToggle" class="topbar-mobile-toggle" type="button" aria-label="Abrir menu">☰</button>
           {% endif %}
           <span style="display:inline-flex; align-items:center; flex-shrink:0;">
-            <img src="{% static 'img/brand/icone-cor.svg' %}" alt="TraceFlor" style="height:36px; width:36px; display:block;">
+            <img src="{% static 'img/brand/icone-branco.svg' %}" alt="TraceFlor" style="height:36px; width:36px; display:block;">
           </span>
           <span class="topbar-copy">
             <strong style="font-family:'Space Grotesk', sans-serif; font-size:17px; letter-spacing:-0.3px;">TraceFlor</strong>
@@ -449,6 +459,10 @@ input[type='checkbox'] { width: auto; }
 
       {% block content %}{% endblock %}
     </main>
+    <footer class="app-footer">
+      <img src="{% static 'img/brand/assinatura-horizontal-branca.svg' %}" alt="TraceFlor" class="app-footer-logo">
+      <span class="app-footer-year">&copy; {% now "Y" %}</span>
+    </footer>
   </div>
 </div>
 <script>
