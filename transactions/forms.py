@@ -105,6 +105,7 @@ class EntryRecordForm(BaseMovementForm):
         self.fields['supplier'].label = 'Fornecedor'
         self.fields['supplier'].queryset = supplier_qs.order_by('name')
         self.fields['supplier'].required = False
+        self.fields['supplier'].widget.is_required = False
         self.fields['supplier'].help_text = 'Selecione o fornecedor da entrada. Em branco, o sistema usará “Não informado”.'
         self.participant = participant
 
@@ -154,6 +155,7 @@ class SaleRecordForm(BaseMovementForm):
         self.fields['product'].queryset = Product.objects.filter(active=True).order_by('name')
         self.fields['attachment'].label = 'Anexo'
         self.fields['customer'].required = False
+        self.fields['customer'].widget.is_required = False
         self.fields['customer'].help_text = 'Selecione um cliente existente ou preencha "Novo cliente" abaixo para cadastrar um na hora.'
         self.fields['new_customer_name'].help_text = 'Se informado, cria um novo cliente para este participante.'
         self.fields['source_lot'].help_text = 'Opcional: selecione um lote específico para vincular a venda a uma compra ou transformação determinada. Em branco, o sistema usa FIFO automático.'

@@ -31,4 +31,5 @@ class ProductTransformationRuleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['participant'].queryset = Participant.objects.filter(status='active').order_by('trade_name', 'legal_name')
         self.fields['participant'].required = False
+        self.fields['participant'].widget.is_required = False
         self.fields['participant'].help_text = 'Selecione a empresa dona do fator. Em branco, a regra vale como padrão geral.'
