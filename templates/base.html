@@ -225,15 +225,13 @@ input[type='checkbox'] { width: auto; }
 .compact-table table { min-width: 100%; }
 .brand-copy { min-width: 0; flex: 1; }
 .brand-copy strong { display:block; font-size: 14px; line-height: 1.25; }
-.brand-copy span { max-width: 180px; display:block; font-size:11px; line-height:1.35; color:rgba(255,255,255,.78); }
 .sidebar.is-collapsed { width: var(--sidebar-collapsed-w); }
 .sidebar.is-collapsed .brand-copy,
 .sidebar.is-collapsed .sidebar-label,
 .sidebar.is-collapsed .sidebar-link-text,
 .sidebar.is-collapsed .sidebar-user strong,
 .sidebar.is-collapsed .sidebar-user span,
-.sidebar.is-collapsed .sidebar-user a,
-.sidebar.is-collapsed .sidebar-toggle-text {
+.sidebar.is-collapsed .sidebar-user a {
   display:none;
 }
 .sidebar.is-collapsed .sidebar-header { align-items:center; }
@@ -277,7 +275,6 @@ input[type='checkbox'] { width: auto; }
         <a class="sidebar-brand" href="/">
           <span class="brand-copy">
             <strong style="font-family:'Space Grotesk', sans-serif;">TraceFlor</strong>
-            <span>Controle operacional de cadeia de custódia, conversões, rastreabilidade e saldo elegível</span>
           </span>
         </a>
         <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Colapsar menu"><span class="sidebar-toggle-text">◀</span></button>
