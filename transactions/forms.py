@@ -153,6 +153,8 @@ class SaleRecordForm(BaseMovementForm):
         self.fields['product'].label = 'Produto'
         self.fields['product'].queryset = Product.objects.filter(active=True).order_by('name')
         self.fields['attachment'].label = 'Anexo'
+        self.fields['customer'].required = False
+        self.fields['customer'].help_text = 'Selecione um cliente existente ou preencha "Novo cliente" abaixo para cadastrar um na hora.'
         self.fields['new_customer_name'].help_text = 'Se informado, cria um novo cliente para este participante.'
         self.fields['source_lot'].help_text = 'Opcional: selecione um lote específico para vincular a venda a uma compra ou transformação determinada. Em branco, o sistema usa FIFO automático.'
         self.fields['supplier'].help_text = 'O fornecedor é herdado automaticamente do lote de origem e não pode ser alterado na saída.'
@@ -215,6 +217,10 @@ class SaleRecordForm(BaseMovementForm):
 
     def clean(self):
         cleaned = super().clean()
+        customer = cleaned.get('customer')
+        new_customer_name = (cleaned.get('new_customer_name') or '').strip()
+        if not customer and not new_customer_name:
+            self.add_error('customer', 'Selecione um cliente existente ou informe o nome de um novo cliente.')
         source_lot = cleaned.get('source_lot')
         product = cleaned.get('product')
         quantity = cleaned.get('quantity')

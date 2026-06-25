@@ -13,7 +13,23 @@
     </div>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
-      {{ form.as_p }}
+      {% if form.new_customer_name %}
+        {% for field in form %}
+          {% if field.name != 'new_customer_name' %}
+            {{ field.as_field_group }}
+            {% if field.name == 'customer' %}
+              <div class="form-row" style="margin-top:-10px;">
+                {{ form.new_customer_name.label_tag }}
+                {{ form.new_customer_name }}
+                {% if form.new_customer_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.help_text }}</p>{% endif %}
+                {% if form.new_customer_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.errors|join:" " }}</p>{% endif %}
+              </div>
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        {{ form.as_p }}
+      {% endif %}
       <div class="actions">
         <button class="btn" type="submit">Salvar lançamento</button>
         <a class="btn secondary" href="javascript:history.back()">Cancelar</a>
