@@ -257,6 +257,28 @@ def get_participant_balance_summary(participant):
     balances = get_balance_items(participant, projected=True)
     return {'participant': participant,'balances': balances,'balance_count': len(balances),'low_count': len([b for b in balances if b['status_class'] in ['warning', 'danger']])}
 
+def get_balance_summary_for_participants(participants):
+    """Versão em lote de get_participant_balance_summary: 1 query agregada
+    para todos os participantes, em vez de 1+ query por participante."""
+    participants = list(participants)
+    participant_ids = [p.id for p in participants]
+    counts = defaultdict(int)
+    low_counts = defaultdict(int)
+    lot_totals = TraceLot.objects.filter(
+        participant_id__in=participant_ids, product__active=True
+    ).values('participant_id', 'product__name', 'product__unit').annotate(balance=Sum('quantity_available'))
+    for row in lot_totals:
+        available = to_decimal(row['balance']).quantize(Decimal('0.001'))
+        if available == 0:
+            continue
+        counts[row['participant_id']] += 1
+        if classify_balance(available) in ['warning', 'danger']:
+            low_counts[row['participant_id']] += 1
+    return {
+        p.id: {'participant': p, 'balance_count': counts.get(p.id, 0), 'low_count': low_counts.get(p.id, 0)}
+        for p in participants
+    }
+
 def _origin_entry_ids_for_lot(lot, visited=None):
     visited = visited or set(); key = f'lot:{lot.id}'
     if key in visited: return set()
@@ -364,17 +386,38 @@ def get_manager_alerts(*, today=None, organization=None):
     corrections = corrections_entries.count() + corrections_sales.count()
     if corrections:
         alerts.append({'level': 'danger','title': 'Pendências de revisão','description': f'Existem {corrections} lançamentos aguardando correção ou validação da gestão.','url': '/compliance/gestor/fechamentos/'})
-    no_movement = []
-    for participant in active_participants:
-        movement_exists = EntryRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists() or SaleRecord.objects.filter(participant=participant, movement_date__year=today.year, movement_date__month=today.month).exists()
-        if not movement_exists: no_movement.append(participant)
-    if no_movement:
-        alerts.append({'level': 'info','title': 'Participantes sem movimento','description': f'{len(no_movement)} participante(s) ainda sem compras ou vendas registradas no mês atual.','url': '/participants/'})
-    low_participants = []
-    for participant in active_participants:
-        low_count = len([b for b in get_balance_items(participant, projected=True) if b['status_class'] in ['warning', 'danger']])
-        if low_count: low_participants.append((participant, low_count))
-    if low_participants:
-        sample = ', '.join([f'{p} ({c})' for p,c in low_participants[:4]])
+
+    # Participantes com movimento no mês — 2 queries agregadas no total, em vez de 2 por participante
+    active_ids = set(active_participants.values_list('id', flat=True))
+    entries_with_movement = set(EntryRecord.objects.filter(
+        participant_id__in=active_ids, movement_date__year=today.year, movement_date__month=today.month
+    ).values_list('participant_id', flat=True))
+    sales_with_movement = set(SaleRecord.objects.filter(
+        participant_id__in=active_ids, movement_date__year=today.year, movement_date__month=today.month
+    ).values_list('participant_id', flat=True))
+    ids_with_movement = entries_with_movement | sales_with_movement
+    no_movement_count = len(active_ids - ids_with_movement)
+    if no_movement_count:
+        alerts.append({'level': 'info','title': 'Participantes sem movimento','description': f'{no_movement_count} participante(s) ainda sem compras ou vendas registradas no mês atual.','url': '/participants/'})
+
+    # Saldos baixos/críticos — 1 query agregada agrupando por participante e produto, em vez de 1+ por participante
+    low_balances_by_participant = {}
+    lot_totals = TraceLot.objects.filter(
+        participant_id__in=active_ids, product__active=True
+    ).values('participant_id', 'product__name', 'product__unit').annotate(balance=Sum('quantity_available'))
+    for row in lot_totals:
+        available = to_decimal(row['balance']).quantize(Decimal('0.001'))
+        if available == 0:
+            continue
+        if classify_balance(available) in ['warning', 'danger']:
+            low_balances_by_participant[row['participant_id']] = low_balances_by_participant.get(row['participant_id'], 0) + 1
+    if low_balances_by_participant:
+        participants_by_id = {p.id: p for p in active_participants}
+        sample = ', '.join([
+            f'{participants_by_id[pid]} ({count})'
+            for pid, count in list(low_balances_by_participant.items())[:4]
+            if pid in participants_by_id
+        ])
         alerts.append({'level': 'warning','title': 'Saldos em atenção no grupo','description': f'Participantes com itens em atenção: {sample}.','url': '/'})
     return alerts
+

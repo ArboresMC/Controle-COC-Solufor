@@ -12,7 +12,7 @@ from compliance.models import MonthlyClosing, BillingTier
 from participants.models import Participant
 from .forms import EntryRecordForm, SaleRecordForm, TransformationRecordForm
 from .models import EntryRecord, SaleRecord, TransformationRecord
-from .services import convert_to_base, get_available_balance, get_balance_items, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot
+from .services import convert_to_base, get_available_balance, get_balance_items, get_balance_summary_for_participants, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot
 
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
@@ -240,8 +240,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             data['pending_closings_count'] = pending_closings_count
 
             participant_summaries = []
-            for participant in active_participants.order_by('trade_name', 'legal_name')[:8]:
-                summary = get_participant_balance_summary(participant)
+            top_participants = list(active_participants.order_by('trade_name', 'legal_name')[:8])
+            summaries_by_id = get_balance_summary_for_participants(top_participants)
+            for participant in top_participants:
+                summary = summaries_by_id[participant.id]
                 participant_summaries.append({
                     'participant_name': str(participant),
                     'participant_id': participant.id,
