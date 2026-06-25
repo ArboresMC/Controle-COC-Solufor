@@ -745,10 +745,13 @@ class BillingReportView(ManagerRequiredMixin, TemplateView):
 
     # Limites de cada faixa (fixos). O valor em R$ vem do banco (BillingTier);
     # estes defaults só são usados se uma faixa esperada não existir ainda.
-    LIMITES_FM = [3, 10, 20, None]
-    LIMITES_COC = [20, 50, None]
-    DEFAULTS_FM = [25, 60, 110, 180]
-    DEFAULTS_COC = [30, 70, 120]
+    # Faixas estendidas em 25/06/2026: antes o teto era plano (ex.: "acima de 20 = R$180"
+    # para sempre); agora a régua continua crescendo para clientes maiores, evitando
+    # subprecificar quem mais usa o sistema.
+    LIMITES_FM = [3, 10, 20, 40, None]
+    LIMITES_COC = [20, 50, 100, None]
+    DEFAULTS_FM = [25, 60, 110, 180, 280]
+    DEFAULTS_COC = [30, 70, 120, 200]
 
     def _faixas_com_valores(self, modulo, limites, defaults):
         tiers = {t.ordem: t.valor for t in BillingTier.objects.filter(modulo=modulo)}
