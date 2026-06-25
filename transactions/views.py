@@ -60,8 +60,13 @@ def _build_top_products(entries_qs, sales_qs):
 
 
 def _build_monthly_chart_data(entries_qs, sales_qs, transformations_qs, today):
-    """Retorna dados dos últimos 6 meses para os gráficos do dashboard."""
+    """Retorna dados dos últimos 6 meses para os gráficos do dashboard.
+    Os valores somam o volume movimentado (quantity_base), não a quantidade
+    de registros — o que importa operacionalmente é o m³/t movimentado,
+    não quantos lançamentos foram feitos.
+    """
     from datetime import date
+    from django.db.models import Sum
     meses_pt = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
     months = []
     for i in range(5, -1, -1):
@@ -79,9 +84,12 @@ def _build_monthly_chart_data(entries_qs, sales_qs, transformations_qs, today):
     transformations_data = []
 
     for y, m in months:
-        entries_data.append(entries_qs.filter(movement_date__year=y, movement_date__month=m).count())
-        sales_data.append(sales_qs.filter(movement_date__year=y, movement_date__month=m).count())
-        transformations_data.append(transformations_qs.filter(movement_date__year=y, movement_date__month=m).count())
+        entries_total = entries_qs.filter(movement_date__year=y, movement_date__month=m).aggregate(total=Sum('quantity_base'))['total'] or 0
+        sales_total = sales_qs.filter(movement_date__year=y, movement_date__month=m).aggregate(total=Sum('quantity_base'))['total'] or 0
+        transformations_total = transformations_qs.filter(movement_date__year=y, movement_date__month=m).aggregate(total=Sum('target_quantity_base'))['total'] or 0
+        entries_data.append(float(entries_total))
+        sales_data.append(float(sales_total))
+        transformations_data.append(float(transformations_total))
 
     return {
         'chart_labels': labels,

@@ -54,9 +54,9 @@
 {% endif %}
 
 <div class="grid metrics">
-  <div class="card metric-card"><div class="metric-label">Entradas no mês</div><div class="metric-value">{{ entries_count }}</div><div class="metric-foot">Total convertido: {{ entries_total }}</div></div>
-  <div class="card metric-card"><div class="metric-label">Saídas no mês</div><div class="metric-value">{{ sales_count }}</div><div class="metric-foot">Total convertido: {{ sales_total }}</div></div>
-  <div class="card metric-card"><div class="metric-label">Transformações</div><div class="metric-value">{{ transformations_count }}</div><div class="metric-foot">Produção convertida: {{ transformations_total }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Entradas no mês</div><div class="metric-value">{{ entries_total }}</div><div class="metric-foot">{{ entries_count }} registro{{ entries_count|pluralize }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Saídas no mês</div><div class="metric-value">{{ sales_total }}</div><div class="metric-foot">{{ sales_count }} registro{{ sales_count|pluralize }}</div></div>
+  <div class="card metric-card"><div class="metric-label">Transformações</div><div class="metric-value">{{ transformations_total }}</div><div class="metric-foot">{{ transformations_count }} registro{{ transformations_count|pluralize }}</div></div>
   <div class="card metric-card"><div class="metric-label">Pendências</div><div class="metric-value">{{ needs_correction }}</div><div class="metric-foot">Registros aguardando correção ou revisão</div></div>
 </div>
 
@@ -71,18 +71,18 @@
   <div class="grid metrics">
     <div class="card metric-card" style="background: var(--panel-soft);">
       <div class="metric-label">Total de entradas</div>
-      <div class="metric-value">{{ hist_entries_count }}</div>
-      <div class="metric-foot">Volume acumulado: {{ hist_entries_total }}</div>
+      <div class="metric-value">{{ hist_entries_total }}</div>
+      <div class="metric-foot">{{ hist_entries_count }} registro{{ hist_entries_count|pluralize }}</div>
     </div>
     <div class="card metric-card" style="background: var(--panel-soft);">
       <div class="metric-label">Total de saídas</div>
-      <div class="metric-value">{{ hist_sales_count }}</div>
-      <div class="metric-foot">Volume acumulado: {{ hist_sales_total }}</div>
+      <div class="metric-value">{{ hist_sales_total }}</div>
+      <div class="metric-foot">{{ hist_sales_count }} registro{{ hist_sales_count|pluralize }}</div>
     </div>
     <div class="card metric-card" style="background: var(--panel-soft);">
       <div class="metric-label">Total de transformações</div>
-      <div class="metric-value">{{ hist_transformations_count }}</div>
-      <div class="metric-foot">Produção acumulada: {{ hist_transformations_total }}</div>
+      <div class="metric-value">{{ hist_transformations_total }}</div>
+      <div class="metric-foot">{{ hist_transformations_count }} registro{{ hist_transformations_count|pluralize }}</div>
     </div>
     <div class="card metric-card" style="background: var(--panel-soft);">
       <div class="metric-label">Movimentações totais</div>
@@ -394,7 +394,10 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString('pt-BR', {maximumFractionDigits: 3}); } } }
+        },
         scales: {
           x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } } },
           y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } }, beginAtZero: true }
@@ -416,7 +419,10 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString('pt-BR', {maximumFractionDigits: 3}); } } }
+        },
         scales: {
           x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } } },
           y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } }, beginAtZero: true }
