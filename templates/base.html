@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.35.0/tabler-icons.min.css">
   <style>
 :root {
   --sidebar-w: 284px;
@@ -82,8 +83,9 @@ a:hover { text-decoration: underline; }
 .sidebar-link:hover { background: rgba(255,255,255,.06); text-decoration:none; }
 .sidebar-link.is-active { background: rgba(255,255,255,.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,.10); }
 .sidebar-icon {
-  width: 22px; min-width:22px; text-align:center; font-size:16px; opacity:.95;
+  width: 22px; min-width:22px; text-align:center; display:inline-flex; align-items:center; justify-content:center;
 }
+.sidebar-icon i { font-size: 18px; color: #C9A227; opacity: .9; }
 .sidebar-footer {
   padding: 14px 12px 18px; border-top: 1px solid rgba(255,255,255,.08);
 }
@@ -232,7 +234,8 @@ input[type='checkbox'] { width: auto; }
 .sidebar.is-collapsed .sidebar-brand { justify-content:center; align-items:center; }
 .sidebar.is-collapsed .brand-logo { width: 42px; max-width: 42px; flex-basis: 42px; }
 .sidebar.is-collapsed .sidebar-link { justify-content:center; padding:0 10px; }
-.sidebar.is-collapsed .sidebar-icon { width:auto; min-width:0; font-size:18px; }
+.sidebar.is-collapsed .sidebar-icon { width:auto; min-width:0; }
+.sidebar.is-collapsed .sidebar-icon i { font-size:20px; }
 .mobile-overlay {
   display:none; position:fixed; inset:0; background:rgba(15,23,42,.42); z-index:15;
 }
@@ -277,7 +280,7 @@ input[type='checkbox'] { width: auto; }
         <div class="sidebar-section">
           <div class="sidebar-label">Principal</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if request.path == '/' %}is-active{% endif %}" href="/"><span class="sidebar-icon">🏠</span><span class="sidebar-link-text">Dashboard</span></a>
+            <a class="sidebar-link {% if request.path == '/' %}is-active{% endif %}" href="/"><span class="sidebar-icon"><i class="ti ti-home" aria-hidden="true"></i></span><span class="sidebar-link-text">Dashboard</span></a>
           </nav>
         </div>
         {% if user.is_participant_user %}
@@ -285,12 +288,12 @@ input[type='checkbox'] { width: auto; }
         <div class="sidebar-section">
           <div class="sidebar-label">Operação · Cadeia de Custódia</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if '/transactions/entries/' in request.path %}is-active{% endif %}" href="/transactions/entries/"><span class="sidebar-icon">📥</span><span class="sidebar-link-text">Entradas</span></a>
-            <a class="sidebar-link {% if '/transactions/sales/' in request.path %}is-active{% endif %}" href="/transactions/sales/"><span class="sidebar-icon">📤</span><span class="sidebar-link-text">Saídas</span></a>
-            <a class="sidebar-link {% if '/transactions/transformations/' in request.path %}is-active{% endif %}" href="/transactions/transformations/"><span class="sidebar-icon">🪵</span><span class="sidebar-link-text">Transformações</span></a>
-            <a class="sidebar-link {% if '/compliance/' in request.path %}is-active{% endif %}" href="/compliance/fechamentos/"><span class="sidebar-icon">🗓️</span><span class="sidebar-link-text">Fechamentos</span></a>
-            <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon">📎</span><span class="sidebar-link-text">Documentos</span></a>
-            <a class="sidebar-link {% if '/reports/import/' in request.path %}is-active{% endif %}" href="/reports/import/"><span class="sidebar-icon">📊</span><span class="sidebar-link-text">Importar planilha</span></a>
+            <a class="sidebar-link {% if '/transactions/entries/' in request.path %}is-active{% endif %}" href="/transactions/entries/"><span class="sidebar-icon"><i class="ti ti-arrow-down-circle" aria-hidden="true"></i></span><span class="sidebar-link-text">Entradas</span></a>
+            <a class="sidebar-link {% if '/transactions/sales/' in request.path %}is-active{% endif %}" href="/transactions/sales/"><span class="sidebar-icon"><i class="ti ti-arrow-up-circle" aria-hidden="true"></i></span><span class="sidebar-link-text">Saídas</span></a>
+            <a class="sidebar-link {% if '/transactions/transformations/' in request.path %}is-active{% endif %}" href="/transactions/transformations/"><span class="sidebar-icon"><i class="ti ti-stack-2" aria-hidden="true"></i></span><span class="sidebar-link-text">Transformações</span></a>
+            <a class="sidebar-link {% if '/compliance/' in request.path %}is-active{% endif %}" href="/compliance/fechamentos/"><span class="sidebar-icon"><i class="ti ti-calendar-event" aria-hidden="true"></i></span><span class="sidebar-link-text">Fechamentos</span></a>
+            <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon"><i class="ti ti-paperclip" aria-hidden="true"></i></span><span class="sidebar-link-text">Documentos</span></a>
+            <a class="sidebar-link {% if '/reports/import/' in request.path %}is-active{% endif %}" href="/reports/import/"><span class="sidebar-icon"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i></span><span class="sidebar-link-text">Importar planilha</span></a>
           </nav>
         </div>
         {% endif %}
@@ -298,13 +301,13 @@ input[type='checkbox'] { width: auto; }
         <div class="sidebar-section">
           <div class="sidebar-label">Manejo Florestal</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon">📊</span><span class="sidebar-link-text">Painel</span></a>
-            <a class="sidebar-link {% if '/manejo/entradas/' in request.path %}is-active{% endif %}" href="/manejo/entradas/"><span class="sidebar-icon">📥</span><span class="sidebar-link-text">Entradas (Inventário)</span></a>
-            <a class="sidebar-link {% if '/manejo/saidas/' in request.path %}is-active{% endif %}" href="/manejo/saidas/"><span class="sidebar-icon">📤</span><span class="sidebar-link-text">Saídas</span></a>
-            <a class="sidebar-link {% if '/manejo/propriedades/' in request.path %}is-active{% endif %}" href="/manejo/propriedades/"><span class="sidebar-icon">🏞️</span><span class="sidebar-link-text">Propriedades</span></a>
-            <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon">🌳</span><span class="sidebar-link-text">Espécies</span></a>
-            <a class="sidebar-link {% if '/manejo/importar/' in request.path %}is-active{% endif %}" href="/manejo/importar/"><span class="sidebar-icon">📥</span><span class="sidebar-link-text">Importar planilha</span></a>
-            <a class="sidebar-link {% if '/manejo/cadastro-lote/' in request.path %}is-active{% endif %}" href="/manejo/cadastro-lote/"><span class="sidebar-icon">📋</span><span class="sidebar-link-text">Cadastro em lote</span></a>
+            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon"><i class="ti ti-chart-bar" aria-hidden="true"></i></span><span class="sidebar-link-text">Painel</span></a>
+            <a class="sidebar-link {% if '/manejo/entradas/' in request.path %}is-active{% endif %}" href="/manejo/entradas/"><span class="sidebar-icon"><i class="ti ti-arrow-down-circle" aria-hidden="true"></i></span><span class="sidebar-link-text">Entradas (Inventário)</span></a>
+            <a class="sidebar-link {% if '/manejo/saidas/' in request.path %}is-active{% endif %}" href="/manejo/saidas/"><span class="sidebar-icon"><i class="ti ti-arrow-up-circle" aria-hidden="true"></i></span><span class="sidebar-link-text">Saídas</span></a>
+            <a class="sidebar-link {% if '/manejo/propriedades/' in request.path %}is-active{% endif %}" href="/manejo/propriedades/"><span class="sidebar-icon"><i class="ti ti-map" aria-hidden="true"></i></span><span class="sidebar-link-text">Propriedades</span></a>
+            <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon"><i class="ti ti-leaf" aria-hidden="true"></i></span><span class="sidebar-link-text">Espécies</span></a>
+            <a class="sidebar-link {% if '/manejo/importar/' in request.path %}is-active{% endif %}" href="/manejo/importar/"><span class="sidebar-icon"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i></span><span class="sidebar-link-text">Importar planilha</span></a>
+            <a class="sidebar-link {% if '/manejo/cadastro-lote/' in request.path %}is-active{% endif %}" href="/manejo/cadastro-lote/"><span class="sidebar-icon"><i class="ti ti-clipboard-list" aria-hidden="true"></i></span><span class="sidebar-link-text">Cadastro em lote</span></a>
           </nav>
         </div>
         {% endif %}
@@ -312,14 +315,14 @@ input[type='checkbox'] { width: auto; }
         <div class="sidebar-section">
           <div class="sidebar-label">Manejo Florestal · Seus participantes</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon">📊</span><span class="sidebar-link-text">Painel consolidado</span></a>
-            <a class="sidebar-link {% if '/manejo/participante/' in request.path %}is-active{% endif %}" href="/manejo/participante/"><span class="sidebar-icon">🔎</span><span class="sidebar-link-text">Ver por participante</span></a>
-            <a class="sidebar-link {% if '/manejo/entradas/' in request.path %}is-active{% endif %}" href="/manejo/entradas/"><span class="sidebar-icon">📥</span><span class="sidebar-link-text">Entradas (Inventário)</span></a>
-            <a class="sidebar-link {% if '/manejo/saidas/' in request.path %}is-active{% endif %}" href="/manejo/saidas/"><span class="sidebar-icon">📤</span><span class="sidebar-link-text">Saídas</span></a>
-            <a class="sidebar-link {% if '/manejo/propriedades/' in request.path %}is-active{% endif %}" href="/manejo/propriedades/"><span class="sidebar-icon">🏞️</span><span class="sidebar-link-text">Propriedades</span></a>
-            <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon">🌳</span><span class="sidebar-link-text">Espécies</span></a>
-            <a class="sidebar-link {% if '/manejo/importar/' in request.path %}is-active{% endif %}" href="/manejo/importar/"><span class="sidebar-icon">📥</span><span class="sidebar-link-text">Importar planilha</span></a>
-            <a class="sidebar-link {% if '/manejo/cadastro-lote/' in request.path %}is-active{% endif %}" href="/manejo/cadastro-lote/"><span class="sidebar-icon">📋</span><span class="sidebar-link-text">Cadastro em lote</span></a>
+            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon"><i class="ti ti-chart-bar" aria-hidden="true"></i></span><span class="sidebar-link-text">Painel consolidado</span></a>
+            <a class="sidebar-link {% if '/manejo/participante/' in request.path %}is-active{% endif %}" href="/manejo/participante/"><span class="sidebar-icon"><i class="ti ti-search" aria-hidden="true"></i></span><span class="sidebar-link-text">Ver por participante</span></a>
+            <a class="sidebar-link {% if '/manejo/entradas/' in request.path %}is-active{% endif %}" href="/manejo/entradas/"><span class="sidebar-icon"><i class="ti ti-arrow-down-circle" aria-hidden="true"></i></span><span class="sidebar-link-text">Entradas (Inventário)</span></a>
+            <a class="sidebar-link {% if '/manejo/saidas/' in request.path %}is-active{% endif %}" href="/manejo/saidas/"><span class="sidebar-icon"><i class="ti ti-arrow-up-circle" aria-hidden="true"></i></span><span class="sidebar-link-text">Saídas</span></a>
+            <a class="sidebar-link {% if '/manejo/propriedades/' in request.path %}is-active{% endif %}" href="/manejo/propriedades/"><span class="sidebar-icon"><i class="ti ti-map" aria-hidden="true"></i></span><span class="sidebar-link-text">Propriedades</span></a>
+            <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon"><i class="ti ti-leaf" aria-hidden="true"></i></span><span class="sidebar-link-text">Espécies</span></a>
+            <a class="sidebar-link {% if '/manejo/importar/' in request.path %}is-active{% endif %}" href="/manejo/importar/"><span class="sidebar-icon"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i></span><span class="sidebar-link-text">Importar planilha</span></a>
+            <a class="sidebar-link {% if '/manejo/cadastro-lote/' in request.path %}is-active{% endif %}" href="/manejo/cadastro-lote/"><span class="sidebar-icon"><i class="ti ti-clipboard-list" aria-hidden="true"></i></span><span class="sidebar-link-text">Cadastro em lote</span></a>
           </nav>
         </div>
         {% endif %}
@@ -327,50 +330,50 @@ input[type='checkbox'] { width: auto; }
         <div class="sidebar-section">
           <div class="sidebar-label">Consulta</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if '/reports/traceability/' in request.path %}is-active{% endif %}" href="/reports/traceability/"><span class="sidebar-icon">🔍</span><span class="sidebar-link-text">Rastreabilidade</span></a>
-            <a class="sidebar-link" href="/reports/consolidated.xlsx"><span class="sidebar-icon">📄</span><span class="sidebar-link-text">Relatório FSC</span></a>
-            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon">📊</span><span class="sidebar-link-text">Painel Manejo</span></a>
+            <a class="sidebar-link {% if '/reports/traceability/' in request.path %}is-active{% endif %}" href="/reports/traceability/"><span class="sidebar-icon"><i class="ti ti-search" aria-hidden="true"></i></span><span class="sidebar-link-text">Rastreabilidade</span></a>
+            <a class="sidebar-link" href="/reports/consolidated.xlsx"><span class="sidebar-icon"><i class="ti ti-file-text" aria-hidden="true"></i></span><span class="sidebar-link-text">Relatório FSC</span></a>
+            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon"><i class="ti ti-chart-bar" aria-hidden="true"></i></span><span class="sidebar-link-text">Painel Manejo</span></a>
           </nav>
         </div>
         {% elif user.is_manager %}
         <div class="sidebar-section">
           <div class="sidebar-label">Cadastros</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if '/participants/' in request.path %}is-active{% endif %}" href="/participants/"><span class="sidebar-icon">🏢</span><span class="sidebar-link-text">Participantes</span></a>
-            <a class="sidebar-link {% if '/catalog/products/' in request.path %}is-active{% endif %}" href="/catalog/products/"><span class="sidebar-icon">📦</span><span class="sidebar-link-text">Produtos</span></a>
-            <a class="sidebar-link {% if '/catalog/conversions/' in request.path %}is-active{% endif %}" href="/catalog/conversions/"><span class="sidebar-icon">⚖️</span><span class="sidebar-link-text">Conversões</span></a>
-            <a class="sidebar-link {% if '/catalog/transformation-rules/' in request.path %}is-active{% endif %}" href="/catalog/transformation-rules/"><span class="sidebar-icon">📐</span><span class="sidebar-link-text">Rendimentos</span></a>
-            <a class="sidebar-link {% if '/catalog/counterparties/' in request.path %}is-active{% endif %}" href="/catalog/counterparties/"><span class="sidebar-icon">🤝</span><span class="sidebar-link-text">Cadastros</span></a>
-            <a class="sidebar-link {% if '/users/' in request.path %}is-active{% endif %}" href="/users/"><span class="sidebar-icon">👥</span><span class="sidebar-link-text">Usuários</span></a>
+            <a class="sidebar-link {% if '/participants/' in request.path %}is-active{% endif %}" href="/participants/"><span class="sidebar-icon"><i class="ti ti-building" aria-hidden="true"></i></span><span class="sidebar-link-text">Participantes</span></a>
+            <a class="sidebar-link {% if '/catalog/products/' in request.path %}is-active{% endif %}" href="/catalog/products/"><span class="sidebar-icon"><i class="ti ti-package" aria-hidden="true"></i></span><span class="sidebar-link-text">Produtos</span></a>
+            <a class="sidebar-link {% if '/catalog/conversions/' in request.path %}is-active{% endif %}" href="/catalog/conversions/"><span class="sidebar-icon"><i class="ti ti-scale" aria-hidden="true"></i></span><span class="sidebar-link-text">Conversões</span></a>
+            <a class="sidebar-link {% if '/catalog/transformation-rules/' in request.path %}is-active{% endif %}" href="/catalog/transformation-rules/"><span class="sidebar-icon"><i class="ti ti-ruler-2" aria-hidden="true"></i></span><span class="sidebar-link-text">Rendimentos</span></a>
+            <a class="sidebar-link {% if '/catalog/counterparties/' in request.path %}is-active{% endif %}" href="/catalog/counterparties/"><span class="sidebar-icon"><i class="ti ti-heart-handshake" aria-hidden="true"></i></span><span class="sidebar-link-text">Cadastros</span></a>
+            <a class="sidebar-link {% if '/users/' in request.path %}is-active{% endif %}" href="/users/"><span class="sidebar-icon"><i class="ti ti-users" aria-hidden="true"></i></span><span class="sidebar-link-text">Usuários</span></a>
           </nav>
         </div>
         <div class="sidebar-section">
           <div class="sidebar-label">Controle · Cadeia de Custódia</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if '/compliance/gestor/' in request.path %}is-active{% endif %}" href="/compliance/gestor/fechamentos/"><span class="sidebar-icon">✅</span><span class="sidebar-link-text">Fechamentos</span></a>
-            <a class="sidebar-link {% if '/transactions/gestor/dados/' in request.path %}is-active{% endif %}" href="/transactions/gestor/dados/"><span class="sidebar-icon">🗑️</span><span class="sidebar-link-text">Gerenciar dados</span></a>
-            <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon">📎</span><span class="sidebar-link-text">Documentos</span></a>
-            <a class="sidebar-link {% if '/reports/traceability/' in request.path %}is-active{% endif %}" href="/reports/traceability/"><span class="sidebar-icon">🔍</span><span class="sidebar-link-text">Rastreabilidade</span></a>
-            <a class="sidebar-link" href="/reports/consolidated.xlsx"><span class="sidebar-icon">📄</span><span class="sidebar-link-text">Relatório FSC</span></a>
-            <a class="sidebar-link {% if '/admin/' in request.path %}is-active{% endif %}" href="/admin/"><span class="sidebar-icon">🛠️</span><span class="sidebar-link-text">Admin</span></a>
+            <a class="sidebar-link {% if '/compliance/gestor/' in request.path %}is-active{% endif %}" href="/compliance/gestor/fechamentos/"><span class="sidebar-icon"><i class="ti ti-circle-check" aria-hidden="true"></i></span><span class="sidebar-link-text">Fechamentos</span></a>
+            <a class="sidebar-link {% if '/transactions/gestor/dados/' in request.path %}is-active{% endif %}" href="/transactions/gestor/dados/"><span class="sidebar-icon"><i class="ti ti-trash" aria-hidden="true"></i></span><span class="sidebar-link-text">Gerenciar dados</span></a>
+            <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon"><i class="ti ti-paperclip" aria-hidden="true"></i></span><span class="sidebar-link-text">Documentos</span></a>
+            <a class="sidebar-link {% if '/reports/traceability/' in request.path %}is-active{% endif %}" href="/reports/traceability/"><span class="sidebar-icon"><i class="ti ti-search" aria-hidden="true"></i></span><span class="sidebar-link-text">Rastreabilidade</span></a>
+            <a class="sidebar-link" href="/reports/consolidated.xlsx"><span class="sidebar-icon"><i class="ti ti-file-text" aria-hidden="true"></i></span><span class="sidebar-link-text">Relatório FSC</span></a>
+            <a class="sidebar-link {% if '/admin/' in request.path %}is-active{% endif %}" href="/admin/"><span class="sidebar-icon"><i class="ti ti-tool" aria-hidden="true"></i></span><span class="sidebar-link-text">Admin</span></a>
           </nav>
         </div>
         <div class="sidebar-section">
           <div class="sidebar-label">Manejo Florestal</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon">📊</span><span class="sidebar-link-text">Painel Manejo</span></a>
-            <a class="sidebar-link {% if '/manejo/participante/' in request.path %}is-active{% endif %}" href="/manejo/participante/"><span class="sidebar-icon">🔎</span><span class="sidebar-link-text">Ver por participante</span></a>
-            <a class="sidebar-link {% if '/manejo/propriedades/' in request.path %}is-active{% endif %}" href="/manejo/propriedades/"><span class="sidebar-icon">🏞️</span><span class="sidebar-link-text">Propriedades</span></a>
-            <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon">🌳</span><span class="sidebar-link-text">Espécies</span></a>
-            <a class="sidebar-link {% if '/manejo/importar/' in request.path %}is-active{% endif %}" href="/manejo/importar/"><span class="sidebar-icon">📥</span><span class="sidebar-link-text">Importar planilha</span></a>
-            <a class="sidebar-link {% if '/manejo/cadastro-lote/' in request.path %}is-active{% endif %}" href="/manejo/cadastro-lote/"><span class="sidebar-icon">📋</span><span class="sidebar-link-text">Cadastro em lote</span></a>
-            <a class="sidebar-link {% if '/manejo/gestor/dados/' in request.path %}is-active{% endif %}" href="/manejo/gestor/dados/"><span class="sidebar-icon">🗑️</span><span class="sidebar-link-text">Gerenciar dados</span></a>
+            <a class="sidebar-link {% if request.path == '/manejo/' %}is-active{% endif %}" href="/manejo/"><span class="sidebar-icon"><i class="ti ti-chart-bar" aria-hidden="true"></i></span><span class="sidebar-link-text">Painel Manejo</span></a>
+            <a class="sidebar-link {% if '/manejo/participante/' in request.path %}is-active{% endif %}" href="/manejo/participante/"><span class="sidebar-icon"><i class="ti ti-search" aria-hidden="true"></i></span><span class="sidebar-link-text">Ver por participante</span></a>
+            <a class="sidebar-link {% if '/manejo/propriedades/' in request.path %}is-active{% endif %}" href="/manejo/propriedades/"><span class="sidebar-icon"><i class="ti ti-map" aria-hidden="true"></i></span><span class="sidebar-link-text">Propriedades</span></a>
+            <a class="sidebar-link {% if '/manejo/especies/' in request.path %}is-active{% endif %}" href="/manejo/especies/"><span class="sidebar-icon"><i class="ti ti-leaf" aria-hidden="true"></i></span><span class="sidebar-link-text">Espécies</span></a>
+            <a class="sidebar-link {% if '/manejo/importar/' in request.path %}is-active{% endif %}" href="/manejo/importar/"><span class="sidebar-icon"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i></span><span class="sidebar-link-text">Importar planilha</span></a>
+            <a class="sidebar-link {% if '/manejo/cadastro-lote/' in request.path %}is-active{% endif %}" href="/manejo/cadastro-lote/"><span class="sidebar-icon"><i class="ti ti-clipboard-list" aria-hidden="true"></i></span><span class="sidebar-link-text">Cadastro em lote</span></a>
+            <a class="sidebar-link {% if '/manejo/gestor/dados/' in request.path %}is-active{% endif %}" href="/manejo/gestor/dados/"><span class="sidebar-icon"><i class="ti ti-trash" aria-hidden="true"></i></span><span class="sidebar-link-text">Gerenciar dados</span></a>
           </nav>
         </div>
         <div class="sidebar-section">
           <div class="sidebar-label">Financeiro</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if '/transactions/gestor/faturamento/' in request.path %}is-active{% endif %}" href="/transactions/gestor/faturamento/"><span class="sidebar-icon">💰</span><span class="sidebar-link-text">Faturamento</span></a>
+            <a class="sidebar-link {% if '/transactions/gestor/faturamento/' in request.path %}is-active{% endif %}" href="/transactions/gestor/faturamento/"><span class="sidebar-icon"><i class="ti ti-currency-dollar" aria-hidden="true"></i></span><span class="sidebar-link-text">Faturamento</span></a>
           </nav>
         </div>
         {% endif %}
