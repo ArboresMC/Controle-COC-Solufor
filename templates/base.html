@@ -515,12 +515,16 @@ input[type='checkbox'] { width: auto; }
 .topbar {
   background: rgba(12, 51, 46, 0.92) !important;
 }
-.btn {
+.btn:not(.secondary):not(.warning):not(.danger) {
   background: #0F5F57 !important;
   box-shadow: 0 6px 16px rgba(15,95,87,.25) !important;
 }
-.btn:hover {
+.btn:not(.secondary):not(.warning):not(.danger):hover {
   background: #0C3F3A !important;
+}
+.btn.secondary {
+  background: #ffffff !important;
+  color: #14241f !important;
 }
 input:focus, select:focus, textarea:focus {
   outline: 2px solid rgba(15,95,87,.18) !important;
