@@ -97,6 +97,41 @@ input:focus {
   border-color: var(--primary);
 }
 
+/* CAMPOS PREENCHIDOS AUTOMATICAMENTE PELO SISTEMA (disabled/readonly) */
+input:disabled,
+select:disabled,
+textarea:disabled,
+input[readonly],
+select[readonly],
+textarea[readonly] {
+  background: #5a6b72;
+  color: #e8eef0;
+  border-color: #4a5a61;
+  cursor: not-allowed;
+  opacity: 1;
+  -webkit-text-fill-color: #e8eef0;
+}
+
+/* MENSAGENS DE ERRO / ORIENTAÇÃO DE CAMPO OBRIGATÓRIO (forms Django) */
+.errorlist {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.errorlist li {
+  color: var(--danger);
+}
+
+input:invalid,
+select:invalid,
+textarea:invalid {
+  border-color: var(--danger);
+}
+
 /* LOGIN HERO */
 .login-hero {
   background: linear-gradient(135deg, var(--primary-2) 0%, var(--primary-3) 100%);
