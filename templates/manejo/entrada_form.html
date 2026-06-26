@@ -9,7 +9,14 @@
     </div>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
-      {{ form.as_p }}
+      {% include "includes/field_line.html" with field=form.propriedade %}
+      {% include "includes/field_line.html" with field=form.especie %}
+      {% include "includes/field_line.html" with field=form.data %}
+      {% include "includes/field_line.html" with field=form.documento %}
+      {% include "includes/field_line.html" with field=form.volume %}
+      {% include "includes/field_line.html" with field=form.unidade %}
+      {% include "includes/field_line.html" with field=form.attachment %}
+      {% include "includes/field_line.html" with field=form.observacoes full_width=True %}
       <div class="actions">
         <button class="btn" type="submit">Salvar entrada</button>
         <a class="btn secondary" href="javascript:history.back()">Cancelar</a>
