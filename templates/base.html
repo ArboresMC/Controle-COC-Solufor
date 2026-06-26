@@ -223,6 +223,44 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
 .form-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px 20px; align-items: start; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-grid > div { margin-bottom: 0; }
+
+/* LINHA DE CAMPO: label a esquerda, input a direita, na mesma linha */
+.field-line {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.field-line label {
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.field-line .field-help-icon {
+  color: var(--muted);
+  cursor: help;
+  font-size: 15px;
+  line-height: 1;
+}
+.field-line .errorlist {
+  grid-column: 2 / 3;
+  margin: -8px 0 0;
+}
+.field-line.full-width {
+  grid-template-columns: 1fr;
+}
+.field-line.full-width label { margin-bottom: 8px; }
+.field-line textarea {
+  min-height: 44px;
+  resize: vertical;
+}
+@media (max-width: 720px) {
+  .field-line { grid-template-columns: 1fr; }
+  .field-line label { margin-bottom: 6px; }
+  .field-line .errorlist { grid-column: 1; }
+}
 .section-menu { display:flex; flex-wrap:wrap; gap:10px; margin-top: 16px; }
 .nav-pills { display:flex; flex-wrap:wrap; gap: 10px; margin: 18px 0 0; }
 .nav-pill {

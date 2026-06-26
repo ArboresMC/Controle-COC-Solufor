@@ -11,47 +11,49 @@
     </div>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
-      <div class="form-grid">
-        {{ form.movement_date.as_field_group }}
-        {{ form.document_number.as_field_group }}
 
-        <div class="full">{{ form.source_lot.as_field_group }}</div>
-
-        {{ form.supplier.as_field_group }}
-        {{ form.fsc_claim.as_field_group }}
-
-        {{ form.target_product.as_field_group }}
-        {{ form.target_quantity.as_field_group }}
-
-        <div class="full">{{ form.customer.as_field_group }}</div>
-
-        <div class="full">{{ form.attachment.as_field_group }}</div>
-        <div class="full">{{ form.notes.as_field_group }}</div>
-      </div>
-
-      {% if form.new_customer_name %}
-      <div class="form-row">
-        <a href="javascript:void(0)" id="toggle-new-customer" class="muted" style="font-weight:700; text-decoration:underline; cursor:pointer;">+ cadastrar novo cliente final na hora</a>
-        <div id="new-customer-wrap" style="display:none; margin-top:10px;">
-          {{ form.new_customer_name.label_tag }}
-          {{ form.new_customer_name }}
-          {% if form.new_customer_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.help_text }}</p>{% endif %}
-          {% if form.new_customer_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.errors|join:" " }}</p>{% endif %}
-        </div>
-      </div>
-      {% endif %}
+      {% include "includes/field_line.html" with field=form.movement_date %}
+      {% include "includes/field_line.html" with field=form.document_number %}
+      {% include "includes/field_line.html" with field=form.source_lot %}
+      {% include "includes/field_line.html" with field=form.supplier %}
+      {% include "includes/field_line.html" with field=form.fsc_claim %}
+      {% include "includes/field_line.html" with field=form.target_product %}
 
       {% if form.new_target_product_name %}
-      <div class="form-row">
-        <a href="javascript:void(0)" id="toggle-new-product" class="muted" style="font-weight:700; text-decoration:underline; cursor:pointer;">+ cadastrar novo produto destino na hora</a>
-        <div id="new-product-wrap" style="display:none; margin-top:10px;">
-          {{ form.new_target_product_name.label_tag }}
-          {{ form.new_target_product_name }}
-          {% if form.new_target_product_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_target_product_name.help_text }}</p>{% endif %}
-          {% if form.new_target_product_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_target_product_name.errors|join:" " }}</p>{% endif %}
+      <div class="field-line">
+        <div></div>
+        <div>
+          <a href="javascript:void(0)" id="toggle-new-product" class="muted" style="font-weight:700; text-decoration:underline; cursor:pointer; font-size:13px;">+ cadastrar novo produto destino na hora</a>
+          <div id="new-product-wrap" style="display:none; margin-top:10px;">
+            {{ form.new_target_product_name.label_tag }}
+            {{ form.new_target_product_name }}
+            {% if form.new_target_product_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_target_product_name.help_text }}</p>{% endif %}
+            {% if form.new_target_product_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_target_product_name.errors|join:" " }}</p>{% endif %}
+          </div>
         </div>
       </div>
       {% endif %}
+
+      {% include "includes/field_line.html" with field=form.target_quantity %}
+      {% include "includes/field_line.html" with field=form.customer %}
+
+      {% if form.new_customer_name %}
+      <div class="field-line">
+        <div></div>
+        <div>
+          <a href="javascript:void(0)" id="toggle-new-customer" class="muted" style="font-weight:700; text-decoration:underline; cursor:pointer; font-size:13px;">+ cadastrar novo cliente final na hora</a>
+          <div id="new-customer-wrap" style="display:none; margin-top:10px;">
+            {{ form.new_customer_name.label_tag }}
+            {{ form.new_customer_name }}
+            {% if form.new_customer_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.help_text }}</p>{% endif %}
+            {% if form.new_customer_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.errors|join:" " }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% include "includes/field_line.html" with field=form.attachment %}
+      {% include "includes/field_line.html" with field=form.notes full_width=True %}
 
       <div class="actions">
         <button class="btn" type="submit">Salvar transformação</button>

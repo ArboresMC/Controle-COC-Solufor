@@ -39,7 +39,7 @@ def get_unit_conversion_factor(product, from_unit: str) -> Decimal:
     reverse = ProductUnitConversion.objects.filter(product=product, from_unit=base_unit, to_unit=from_unit, active=True).first()
     if reverse and reverse.factor:
         return Decimal('1') / reverse.factor
-    raise ValueError(f'Não existe fator de conversão cadastrado para {product} de {from_unit} para {base_unit}.')
+    raise ValueError(f'Não existe fator de conversão cadastrado para {product} entre {from_unit} e {base_unit}. Cadastre a conversão em qualquer uma das duas direções (de {from_unit} para {base_unit}, ou de {base_unit} para {from_unit}).')
 
 def convert_to_base(product, quantity, from_unit: str) -> Decimal:
     quantity = to_decimal(quantity)

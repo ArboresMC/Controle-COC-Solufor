@@ -42,7 +42,10 @@ class BaseMovementForm(forms.ModelForm):
             'notes',
             'attachment',
         ]
-        widgets = {'movement_date': DateInput()}
+        widgets = {
+            'movement_date': DateInput(),
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -280,7 +283,10 @@ class TransformationRecordForm(forms.ModelForm):
             'notes',
             'attachment',
         ]
-        widgets = {'movement_date': DateInput()}
+        widgets = {
+            'movement_date': DateInput(),
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
 
     def __init__(self, *args, **kwargs):
         participant = kwargs.pop('participant', None)

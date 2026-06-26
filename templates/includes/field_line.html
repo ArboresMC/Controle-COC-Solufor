@@ -1,0 +1,15 @@
+{% comment %}
+Renderiza um campo de formulário no padrão "label à esquerda, campo à direita".
+Uso: {% include "includes/field_line.html" with field=form.algum_campo %}
+Para textarea (Observações), passe full_width=True para empilhar label/campo.
+{% endcomment %}
+<div class="field-line{% if full_width %} full-width{% endif %}">
+  <label for="{{ field.id_for_label }}">
+    {{ field.label }}{% if field.field.required %} *{% endif %}
+    {% if field.help_text %}<i class="ti ti-info-circle field-help-icon" title="{{ field.help_text }}"></i>{% endif %}
+  </label>
+  <div>
+    {{ field }}
+    {{ field.errors }}
+  </div>
+</div>
