@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.functional import cached_property
 
 
 class User(AbstractUser):
@@ -59,10 +60,13 @@ class User(AbstractUser):
     def is_participant_user(self):
         return self.role == 'participant'
 
-    @property
+    @cached_property
     def is_manejo_multi(self):
         """True se este usuário opera Manejo Florestal de mais de um participante
-        (o "mini-gestor" descrito na decisão de produto). Não tem efeito sobre CoC."""
+        (o "mini-gestor" descrito na decisão de produto). Não tem efeito sobre CoC.
+        Usa cached_property (em vez de property) porque é consultado mais de uma
+        vez por requisição (sidebar do base.html + templates de listagem do
+        Manejo) — sem cache, cada acesso disparava uma nova query .exists()."""
         return self.pk is not None and self.participantes_manejo.exists()
 
     def manejo_participant_ids(self):

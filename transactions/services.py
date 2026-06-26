@@ -340,12 +340,17 @@ def get_entry_balance_rows(participant=None):
         rows.append({'participant': lot.participant,'entry': lot.entry,'supplier': lot.supplier,'product': lot.product,'movement_date': lot.movement_date,'quantity_total': to_decimal(lot.quantity_base).quantize(Decimal('0.001')),'quantity_sold': sales_total.quantize(Decimal('0.001')),'quantity_transformed': transformations_total.quantize(Decimal('0.001')),'quantity_remaining': get_lot_remaining(lot),'unit': lot.product.get_unit_display(),'customers': ', '.join(sorted(customers))})
     return rows
 
-def get_participant_alerts(participant, *, today=None):
+def get_participant_alerts(participant, *, today=None, balance_items=None):
     from datetime import date
     from compliance.models import MonthlyClosing
     from .models import EntryRecord, SaleRecord, TransformationRecord
     today = today or date.today(); alerts = []
-    low_balances = [b for b in get_balance_items(participant, projected=True) if b['status_class'] in ['warning', 'danger']]
+    # balance_items pode ser passado pelo chamador (ex: DashboardView) que já o
+    # calculou para outro fim — evita rodar a mesma query agregada duas vezes
+    # na mesma requisição. Se não for passado, calcula aqui como antes.
+    if balance_items is None:
+        balance_items = get_balance_items(participant, projected=True)
+    low_balances = [b for b in balance_items if b['status_class'] in ['warning', 'danger']]
     if low_balances:
         sample = ', '.join([f"{item['product']} ({item['balance']} {item['unit']})" for item in low_balances[:3]])
         alerts.append({'level': 'warning' if any(i['status_class']=='warning' for i in low_balances) else 'danger','title': 'Saldos em atenção','description': f'Itens com saldo baixo ou crítico: {sample}.','url': '/'})

@@ -293,7 +293,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             data.update({
                 'balance_items': _serialize_balance_items(balance_items),
                 'current_closing': current_closing,
-                'dashboard_alerts': get_participant_alerts(participant, today=today) if participant else [],
+                'dashboard_alerts': get_participant_alerts(participant, today=today, balance_items=balance_items) if participant else [],
                 'balance_summary': {
                     'balance_count': len(balance_items),
                     'low_count': len([item for item in balance_items if item['status_class'] in ['warning', 'danger']]),
