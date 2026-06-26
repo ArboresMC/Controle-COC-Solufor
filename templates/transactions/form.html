@@ -103,21 +103,28 @@
 </div>
 <script>
 (function () {
-  function setupToggle(linkId, wrapId) {
+  function setupToggle(linkId, wrapId, expandLabel, collapseLabel) {
     var link = document.getElementById(linkId);
     var wrap = document.getElementById(wrapId);
     if (!link || !wrap) return;
     var hasValue = wrap.querySelector('input') && wrap.querySelector('input').value.trim().length > 0;
-    if (hasValue) { wrap.style.display = 'block'; link.style.display = 'none'; }
+    var isOpen = !!hasValue;
+    function render() {
+      wrap.style.display = isOpen ? 'block' : 'none';
+      link.textContent = isOpen ? collapseLabel : expandLabel;
+    }
+    render();
     link.addEventListener('click', function () {
-      wrap.style.display = 'block';
-      link.style.display = 'none';
-      var input = wrap.querySelector('input');
-      if (input) input.focus();
+      isOpen = !isOpen;
+      render();
+      if (isOpen) {
+        var input = wrap.querySelector('input');
+        if (input) input.focus();
+      }
     });
   }
-  setupToggle('toggle-new-customer', 'new-customer-wrap');
-  setupToggle('toggle-new-product', 'new-product-wrap');
+  setupToggle('toggle-new-customer', 'new-customer-wrap', '+ cadastrar novo cliente na hora', '- ocultar cadastro de novo cliente');
+  setupToggle('toggle-new-product', 'new-product-wrap', '+ cadastrar novo produto na hora', '- ocultar cadastro de novo produto');
 })();
 </script>
 {% endblock %}
