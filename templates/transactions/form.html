@@ -13,23 +13,60 @@
     </div>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
+      <div class="form-grid">
+        {{ form.movement_date.as_field_group }}
+        {{ form.document_number.as_field_group }}
+
+        {% if form.supplier %}
+          {{ form.supplier.as_field_group }}
+        {% endif %}
+        {% if form.customer %}
+          <div class="full">{{ form.customer.as_field_group }}</div>
+        {% endif %}
+
+        {{ form.product.as_field_group }}
+        <div>
+          {{ form.quantity.as_field_group }}
+        </div>
+        <div class="full" style="margin-top:-16px;">
+          {{ form.movement_unit.as_field_group }}
+        </div>
+
+        {{ form.fsc_claim.as_field_group }}
+        {{ form.batch_code.as_field_group }}
+
+        <div class="full">{{ form.attachment.as_field_group }}</div>
+        <div class="full">{{ form.notes.as_field_group }}</div>
+      </div>
+
       {% if form.new_customer_name %}
-        {% for field in form %}
-          {% if field.name != 'new_customer_name' %}
-            {{ field.as_field_group }}
-            {% if field.name == 'customer' %}
-              <div class="form-row" style="margin-top:-10px;">
-                {{ form.new_customer_name.label_tag }}
-                {{ form.new_customer_name }}
-                {% if form.new_customer_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.help_text }}</p>{% endif %}
-                {% if form.new_customer_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.errors|join:" " }}</p>{% endif %}
-              </div>
-            {% endif %}
-          {% endif %}
-        {% endfor %}
-      {% else %}
-        {{ form.as_p }}
+      <div class="form-row">
+        <a href="javascript:void(0)" id="toggle-new-customer" class="muted" style="font-weight:700; text-decoration:underline; cursor:pointer;">+ cadastrar novo cliente na hora</a>
+        <div id="new-customer-wrap" style="display:none; margin-top:10px;">
+          {{ form.new_customer_name.label_tag }}
+          {{ form.new_customer_name }}
+          {% if form.new_customer_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.help_text }}</p>{% endif %}
+          {% if form.new_customer_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_customer_name.errors|join:" " }}</p>{% endif %}
+        </div>
+      </div>
       {% endif %}
+
+      {% if form.new_product_name %}
+      <div class="form-row">
+        <a href="javascript:void(0)" id="toggle-new-product" class="muted" style="font-weight:700; text-decoration:underline; cursor:pointer;">+ cadastrar novo produto na hora</a>
+        <div id="new-product-wrap" style="display:none; margin-top:10px;">
+          {{ form.new_product_name.label_tag }}
+          {{ form.new_product_name }}
+          {% if form.new_product_name.help_text %}<p class="muted" style="font-size:13px; margin:4px 0 0;">{{ form.new_product_name.help_text }}</p>{% endif %}
+          {% if form.new_product_name.errors %}<p style="color:var(--danger); font-size:13px; margin:4px 0 0;">{{ form.new_product_name.errors|join:" " }}</p>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if form.source_lot %}
+        <div class="form-row">{{ form.source_lot.as_field_group }}</div>
+      {% endif %}
+
       <div class="actions">
         <button class="btn" type="submit">Salvar lançamento</button>
         <a class="btn secondary" href="javascript:history.back()">Cancelar</a>
@@ -63,4 +100,23 @@
     </div>
   </div>
 </div>
+<script>
+(function () {
+  function setupToggle(linkId, wrapId) {
+    var link = document.getElementById(linkId);
+    var wrap = document.getElementById(wrapId);
+    if (!link || !wrap) return;
+    var hasValue = wrap.querySelector('input') && wrap.querySelector('input').value.trim().length > 0;
+    if (hasValue) { wrap.style.display = 'block'; link.style.display = 'none'; }
+    link.addEventListener('click', function () {
+      wrap.style.display = 'block';
+      link.style.display = 'none';
+      var input = wrap.querySelector('input');
+      if (input) input.focus();
+    });
+  }
+  setupToggle('toggle-new-customer', 'new-customer-wrap');
+  setupToggle('toggle-new-product', 'new-product-wrap');
+})();
+</script>
 {% endblock %}
