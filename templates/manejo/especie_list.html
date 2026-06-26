@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block hero_title %}Espécies{% endblock %}
-{% block hero_text %}Cadastre as espécies manejadas e seus fatores de conversão próprios.{% endblock %}
+{% block hero_text %}<p class="page-note">Cadastre as espécies manejadas e seus fatores de conversão próprios.</p>{% endblock %}
 {% block content %}
 
 {% if user.is_manager or user.is_auditor or user.is_manejo_multi %}

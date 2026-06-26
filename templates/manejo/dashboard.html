@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block hero_title %}Manejo Florestal{% endblock %}
-{% block hero_text %}
-{% if is_mini_gestor %}Visão consolidada dos participantes que você opera no programa de Manejo Florestal.{% elif is_aggregate %}Visão consolidada de todos os membros do programa de Manejo Florestal.{% else %}Controle de inventário certificado por propriedade e espécie, com saldo disponível para extração.{% endif %}
-{% endblock %}
+{% block hero_text %}<p class="page-note">{% if is_mini_gestor %}Visão consolidada dos participantes que você opera no programa de Manejo Florestal.{% elif is_aggregate %}Visão consolidada de todos os membros do programa de Manejo Florestal.{% else %}Controle de inventário certificado por propriedade e espécie, com saldo disponível para extração.{% endif %}</p>{% endblock %}
 {% block content %}
 
 {% if messages %}

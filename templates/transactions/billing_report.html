@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block hero_title %}Faturamento sugerido{% endblock %}
-{% block hero_text %}Régua de cobrança baseada em propriedades (Manejo Florestal) e movimentações mensais (Cadeia de Custódia).{% endblock %}
+{% block hero_text %}<p class="page-note">Régua de cobrança baseada em propriedades (Manejo Florestal) e movimentações mensais (Cadeia de Custódia).</p>{% endblock %}
 {% block content %}
 
 <form method="post" action="{% url 'billing_tier_update' %}">

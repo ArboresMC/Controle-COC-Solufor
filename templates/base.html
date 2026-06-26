@@ -133,6 +133,18 @@ a:hover { text-decoration: underline; }
 .hero h1, .page-title h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.1; }
 .hero p, .page-title p { margin: 0; color: rgba(255,255,255,.86); max-width: 840px; }
 .page-title p { color: var(--muted); }
+
+/* FAIXA DE STATUS DISCRETA (substitui o hero grande em todas as paginas) */
+.status-strip {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.status-strip .badge { font-size: 11px; padding: 6px 12px; }
+.status-strip .badge i { margin-right: 4px; font-size: 13px; vertical-align: -1px; }
+.page-note {
+  margin: 0 0 18px; color: var(--muted); font-size: 14px; max-width: 760px;
+}
+
 .quick-actions, .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .card {
   background: var(--panel); border: 1px solid rgba(15,95,87,.10);
@@ -482,35 +494,29 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
           </span>
         </div>
         {% else %}
+        {% if request.path != '/login/' %}
         <div class="userbox">
           <strong>Acesso ao sistema</strong>
           <span><a href="/login/">Entrar</a></span>
         </div>
+        {% endif %}
         {% endif %}
       </div>
     </header>
 
     <main class="page">
       {% if user.is_authenticated %}
-      <section class="hero">
-        <div>
-          <div class="kicker">Ambiente operacional TraceFlor</div>
-          <h1>{% block hero_title %}TraceFlor{% endblock %}</h1>
-          <p>{% block hero_text %}Ambiente de controle operacional para grupo certificado, com gestão de entradas, saídas, transformações, saldos, importação e rastreabilidade.{% endblock %}</p>
-        </div>
-        <div class="stack">
-          {% block hero_side %}
-          <span class="badge neutral">{% now "d/m/Y H:i" %}</span>
-          {% if user.is_manager %}
-            <span class="badge success">Gestão consolidada ativa</span>
-          {% elif user.is_auditor %}
-            <span class="badge warning">Ambiente de consulta</span>
-          {% else %}
-            <span class="badge success">Lançamentos operacionais liberados</span>
-          {% endif %}
-          {% endblock %}
-        </div>
-      </section>
+      <div class="status-strip">
+        <span class="badge neutral"><i class="ti ti-clock" aria-hidden="true"></i> {% now "d/m/Y H:i" %}</span>
+        {% if user.is_manager %}
+          <span class="badge success">Gestão consolidada ativa</span>
+        {% elif user.is_auditor %}
+          <span class="badge warning">Ambiente de consulta</span>
+        {% else %}
+          <span class="badge success">Lançamentos operacionais liberados</span>
+        {% endif %}
+      </div>
+      {% block hero_text %}{% endblock %}
       {% endif %}
 
       {% if messages %}
