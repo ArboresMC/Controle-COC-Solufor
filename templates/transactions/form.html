@@ -12,7 +12,7 @@
       </div>
     </div>
 
-    {% if not form.instance.pk %}
+    {% if not form.instance.pk and form.supplier and not form.supplier.field.disabled %}
     <div class="nfe-import-bar" id="nfeImportBar">
       <span class="nfe-import-icon"><i class="ti ti-file-type-xml" aria-hidden="true"></i></span>
       <div class="nfe-import-text">
