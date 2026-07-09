@@ -3,15 +3,18 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Q
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView, View
 from catalog.models import Counterparty, Product
 from compliance.models import MonthlyClosing, BillingTier
 from participants.models import Participant
 from .forms import EntryRecordForm, SaleRecordForm, TransformationRecordForm
 from .models import EntryRecord, SaleRecord, TransformationRecord
+from .nfe_parser import parse_nfe_xml
 from .services import convert_to_base, get_available_balance, get_balance_items, get_balance_summary_for_participants, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot
 
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
@@ -878,3 +881,56 @@ class BillingTierUpdateView(ManagerRequiredMixin, View):
             messages.warning(request, 'Nenhum valor foi alterado.')
 
         return redirect('billing_report')
+
+
+@require_POST
+def parse_nfe_view(request):
+    """
+    Endpoint AJAX: recebe XML da NF-e, extrai campos e retorna JSON.
+    Tenta casar o fornecedor pelo CNPJ no cadastro do sistema.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Nao autenticado.'}, status=403)
+
+    xml_file = request.FILES.get('xml_file')
+    if not xml_file:
+        return JsonResponse({'error': 'Nenhum arquivo enviado.'}, status=400)
+
+    if not xml_file.name.lower().endswith('.xml'):
+        return JsonResponse({'error': 'O arquivo deve ser um XML (.xml).'}, status=400)
+
+    if xml_file.size > 2 * 1024 * 1024:  # 2 MB
+        return JsonResponse({'error': 'Arquivo muito grande (maximo 2 MB).'}, status=400)
+
+    try:
+        dados = parse_nfe_xml(xml_file.read())
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=422)
+
+    # Tenta localizar o fornecedor pelo CNPJ no cadastro
+    supplier_id = None
+    supplier_display = dados['supplier_name']
+    cnpj = dados['supplier_cnpj'].replace('.', '').replace('/', '').replace('-', '')
+
+    if cnpj:
+        qs = Counterparty.objects.filter(document_id__icontains=cnpj)
+        if not qs.exists():
+            # Tenta pelo nome (fallback)
+            nome = dados['supplier_name']
+            if nome:
+                qs = Counterparty.objects.filter(name__icontains=nome[:20])
+        if qs.exists():
+            cp = qs.first()
+            supplier_id = cp.pk
+            supplier_display = cp.name
+
+    return JsonResponse({
+        'document_number': dados['document_number'],
+        'movement_date': dados['movement_date'],
+        'supplier_id': supplier_id,
+        'supplier_display': supplier_display,
+        'supplier_cnpj': dados['supplier_cnpj'],
+        'supplier_encontrado': supplier_id is not None,
+        'itens': dados['itens'],
+        'item_unico': dados['item_unico'],
+    })

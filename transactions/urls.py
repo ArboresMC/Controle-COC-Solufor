@@ -6,6 +6,7 @@ from .views import (
     DocumentCenterView,
     DataManagementView, DataDeleteView, DataDeleteSingleView,
     BillingReportView, BillingTierUpdateView,
+    parse_nfe_view,
 )
 
 urlpatterns = [
@@ -24,4 +25,5 @@ urlpatterns = [
     path('gestor/dados/excluir/unico/', DataDeleteSingleView.as_view(), name='data_delete_single'),
     path('gestor/faturamento/', BillingReportView.as_view(), name='billing_report'),
     path('gestor/faturamento/salvar/', BillingTierUpdateView.as_view(), name='billing_tier_update'),
+    path('nfe/parse/', parse_nfe_view, name='nfe_parse'),
 ]

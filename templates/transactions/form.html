@@ -11,7 +11,22 @@
         <p class="card-subtitle">Preencha os dados do documento. A quantidade informada será convertida automaticamente para a unidade base cadastrada.</p>
       </div>
     </div>
-    <form method="post" enctype="multipart/form-data">
+
+    {% if not form.instance.pk %}
+    <div class="nfe-import-bar" id="nfeImportBar">
+      <span class="nfe-import-icon"><i class="ti ti-file-type-xml" aria-hidden="true"></i></span>
+      <div class="nfe-import-text">
+        <strong>Tem o XML da NF-e?</strong> Importe e preencha automaticamente número, data, fornecedor e quantidade.
+      </div>
+      <label class="nfe-import-btn" for="nfe-xml-input">
+        <i class="ti ti-upload" aria-hidden="true"></i> Importar XML
+        <input type="file" id="nfe-xml-input" accept=".xml" style="display:none;">
+      </label>
+    </div>
+    <div id="nfe-status" style="display:none; margin-bottom:16px;"></div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" id="entry-form">
       {% csrf_token %}
 
       {% include "includes/field_line.html" with field=form.movement_date %}
@@ -82,6 +97,7 @@
       </div>
     </div>
     <div class="stack">
+      <div class="info-box"><strong>Importação via XML da NF-e</strong><br><span class="muted">Clique em "Importar XML" para pré-preencher os campos automaticamente. O arquivo .xml vem junto com a nota fiscal eletrônica do seu fornecedor.</span></div>
       <div class="info-box"><strong>Produto e unidade</strong><br><span class="muted">Informe a unidade utilizada no documento. O sistema converte para a unidade base do produto.</span></div>
       <div class="info-box"><strong>Documentação</strong><br><span class="muted">Sempre que possível, anexe a nota fiscal ou o documento comprobatório do lançamento.</span></div>
       <div class="info-box"><strong>Consistência</strong><br><span class="muted">Em saídas, o sistema compara a quantidade com o saldo disponível, mantém o fornecedor de origem travado conforme o lote e bloqueia extrapolações.</span></div>
@@ -101,6 +117,33 @@
     </div>
   </div>
 </div>
+<style>
+.nfe-import-bar {
+  display: flex; align-items: center; gap: 14px;
+  background: #E1F5EE; border: 1px dashed #5DCAA5;
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 20px;
+}
+.nfe-import-icon i { font-size: 26px; color: #0F5F57; }
+.nfe-import-text { flex: 1; font-size: 13px; color: #0C3F3A; }
+.nfe-import-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #0F5F57; color: #fff; border-radius: 8px;
+  padding: 8px 16px; font-size: 13px; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+}
+.nfe-import-btn:hover { background: #0C3F3A; }
+.nfe-alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.5;
+}
+.nfe-alert.success { background: #E1F5EE; border: 1px solid #9FE1CB; color: #085041; }
+.nfe-alert.warning { background: #fff3d9; border: 1px solid #f0c674; color: #7a4a0a; }
+.nfe-alert.error { background: #feeceb; border: 1px solid #fca99e; color: #b42318; }
+.nfe-alert i { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.nfe-alert.success i { color: #0F5F57; }
+.nfe-alert.warning i { color: #b45309; }
+.nfe-alert.error i { color: #b42318; }
+</style>
 <script>
 (function () {
   function setupToggle(linkId, wrapId, expandLabel, collapseLabel) {
@@ -125,6 +168,90 @@
   }
   setupToggle('toggle-new-customer', 'new-customer-wrap', '+ cadastrar novo cliente na hora', '- ocultar cadastro de novo cliente');
   setupToggle('toggle-new-product', 'new-product-wrap', '+ cadastrar novo produto na hora', '- ocultar cadastro de novo produto');
+
+  // --- IMPORTAÇÃO DE XML DA NF-e ---
+  var xmlInput = document.getElementById('nfe-xml-input');
+  var statusDiv = document.getElementById('nfe-status');
+  if (!xmlInput || !statusDiv) return;
+
+  function setStatus(tipo, icone, html) {
+    statusDiv.innerHTML = '<div class="nfe-alert ' + tipo + '"><i class="ti ti-' + icone + '" aria-hidden="true"></i><div>' + html + '</div></div>';
+    statusDiv.style.display = 'block';
+  }
+
+  function setField(name, value) {
+    var el = document.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    el.value = value;
+  }
+
+  function setCsrf() {
+    var el = document.querySelector('[name="csrfmiddlewaretoken"]');
+    return el ? el.value : '';
+  }
+
+  xmlInput.addEventListener('change', function () {
+    var file = xmlInput.files[0];
+    if (!file) return;
+
+    setStatus('success', 'loader-2', 'Lendo o XML da NF-e...');
+
+    var fd = new FormData();
+    fd.append('xml_file', file);
+    fd.append('csrfmiddlewaretoken', setCsrf());
+
+    fetch('/transactions/nfe/parse/', {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-CSRFToken': setCsrf() },
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) {
+        setStatus('error', 'alert-circle', '<strong>Erro ao ler o XML:</strong> ' + d.error);
+        return;
+      }
+
+      // Preenche campos certos
+      setField('movement_date', d.movement_date);
+      setField('document_number', d.document_number);
+
+      // Fornecedor
+      if (d.supplier_encontrado && d.supplier_id) {
+        setField('supplier', d.supplier_id);
+      }
+
+      // Item único: preenche quantidade e tenta unidade
+      var avisos = [];
+      if (d.item_unico) {
+        var item = d.item_unico;
+        setField('quantity', item.quantidade);
+        if (item.unidade_mapeada) {
+          setField('movement_unit', item.unidade_traceflor);
+        } else {
+          avisos.push('Unidade da NF-e (<strong>' + item.unidade_nfe + '</strong>) não reconhecida — selecione manualmente.');
+        }
+        if (!d.supplier_encontrado) {
+          avisos.push('Fornecedor "<strong>' + d.supplier_display + '</strong>" (CNPJ: ' + d.supplier_cnpj + ') não encontrado no cadastro — selecione ou cadastre.');
+        }
+        avisos.push('Confirme o <strong>produto</strong> e a <strong>Declaração FSC</strong> antes de salvar.');
+
+        var msg = '<strong>XML importado:</strong> NF-e nº ' + d.document_number + ' — ' + d.supplier_display + '.';
+        if (avisos.length) {
+          msg += '<ul style="margin:8px 0 0; padding-left:18px;">' + avisos.map(function(a){ return '<li>' + a + '</li>'; }).join('') + '</ul>';
+        }
+        setStatus(avisos.length ? 'warning' : 'success', avisos.length ? 'alert-triangle' : 'check', msg);
+      } else {
+        // Múltiplos itens — só preenche cabeçalho
+        setStatus('warning', 'alert-triangle',
+          '<strong>XML importado:</strong> NF-e nº ' + d.document_number + ' com <strong>' + d.itens.length + ' itens</strong>. ' +
+          'Número, data e fornecedor preenchidos. Selecione o produto e informe a quantidade manualmente para cada lançamento.');
+      }
+    })
+    .catch(function() {
+      setStatus('error', 'alert-circle', 'Falha na comunicação com o servidor. Tente novamente.');
+    });
+  });
 })();
 </script>
 {% endblock %}
