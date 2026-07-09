@@ -1,8 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.views import PasswordChangeView
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, ListView, UpdateView
+from django.views.generic import CreateView, ListView, TemplateView, UpdateView
 from .forms import UserCreateForm, UserUpdateForm
 from .models import User
 
@@ -38,4 +39,21 @@ class UserUpdateView(ManagerRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, 'Usuário atualizado com sucesso.')
+        return super().form_valid(form)
+
+
+class MeuPerfilView(LoginRequiredMixin, TemplateView):
+    template_name = 'accounts/meu_perfil.html'
+
+
+class AjudaView(LoginRequiredMixin, TemplateView):
+    template_name = 'accounts/ajuda.html'
+
+
+class TrocarSenhaView(LoginRequiredMixin, PasswordChangeView):
+    template_name = 'accounts/trocar_senha.html'
+    success_url = reverse_lazy('meu_perfil')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Senha alterada com sucesso.')
         return super().form_valid(form)

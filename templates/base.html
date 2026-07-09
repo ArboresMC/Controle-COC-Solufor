@@ -115,8 +115,14 @@ a:hover { text-decoration: underline; }
 .userbox strong { display:block; font-size: 14px; }
 .userbox span, .userbox a { color: var(--muted); font-size: 12px; }
 
-/* USERBOX COMPACTO DA TOPBAR (bolha de iniciais + nome + icone de saida) */
-.userbox-compact { display: flex; align-items: center; gap: 10px; }
+/* DROPDOWN DE USUÁRIO */
+.userbox-compact { position: relative; }
+.user-menu-btn {
+  display: flex; align-items: center; gap: 10px;
+  background: none; border: none; cursor: pointer; padding: 4px 6px;
+  border-radius: 10px; transition: background .15s;
+}
+.user-menu-btn:hover { background: rgba(255,255,255,.10); }
 .user-avatar {
   width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
   background: rgba(255,255,255,.16); color: #ffffff;
@@ -124,13 +130,47 @@ a:hover { text-decoration: underline; }
   font-weight: 700; font-size: 13px;
 }
 .user-name { color: #ffffff; font-size: 14px; font-weight: 600; }
-.logout-icon-btn {
-  background: none; border: none; padding: 6px; border-radius: 8px; cursor: pointer;
-  color: rgba(255,255,255,.78); font-size: 18px; line-height: 0; display: flex;
+.user-menu-chevron { color: rgba(255,255,255,.6); font-size: 14px; transition: transform .2s; }
+.user-menu-btn[aria-expanded="true"] .user-menu-chevron { transform: rotate(180deg); }
+
+.user-dropdown {
+  position: absolute; top: calc(100% + 10px); right: 0;
+  background: #ffffff; border: 0.5px solid #d6e6ec;
+  border-radius: 12px; width: 220px; z-index: 999;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.08);
+  display: none;
 }
-.logout-icon-btn:hover { background: rgba(255,255,255,.12); color: #ffffff; }
+.user-dropdown.is-open { display: block; }
+.user-dropdown-header {
+  padding: 14px 16px 12px; border-bottom: 0.5px solid #d6e6ec;
+  display: flex; align-items: center; gap: 10px;
+}
+.user-dropdown-avatar {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  background: #E1F5EE; color: #0F5F57;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px;
+}
+.user-dropdown-name { font-size: 14px; font-weight: 600; color: #0f2a35; margin: 0; }
+.user-dropdown-role { font-size: 12px; color: #6b8a96; margin: 0; }
+.user-dropdown-body { padding: 6px 0; }
+.user-dropdown-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px; text-decoration: none;
+  color: #0f2a35; font-size: 14px; cursor: pointer;
+  transition: background .12s; background: none; border: none; width: 100%; text-align: left;
+}
+.user-dropdown-item:hover { background: #E1F5EE; color: #0F5F57; }
+.user-dropdown-item:hover i { color: #0F5F57; }
+.user-dropdown-item i { font-size: 16px; color: #6b8a96; }
+.user-dropdown-divider { border: none; border-top: 0.5px solid #d6e6ec; margin: 4px 0; }
+.user-dropdown-item.danger { color: #b42318; }
+.user-dropdown-item.danger i { color: #b42318; }
+.user-dropdown-item.danger:hover { background: #feeceb; color: #b42318; }
+
 @media (max-width: 600px) {
   .user-name { display: none; }
+  .user-menu-chevron { display: none; }
 }
 .page { max-width: 1280px; margin: 0 auto; padding: 24px; width:100%; flex: 1; }
 .app-footer {
@@ -500,14 +540,35 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
         </div>
         {% if user.is_authenticated %}
         <div class="userbox-compact">
-          <span class="user-avatar">{{ user.username|slice:":1"|upper }}</span>
-          <span class="user-name">{{ user.username }}</span>
-          <form method="post" action="{% url 'logout' %}" style="display:inline; line-height:0;">
-            {% csrf_token %}
-            <button type="submit" class="logout-icon-btn" title="Sair" aria-label="Sair">
-              <i class="ti ti-logout" aria-hidden="true"></i>
-            </button>
-          </form>
+          <button class="user-menu-btn" id="userMenuBtn" aria-expanded="false" aria-haspopup="true" aria-label="Menu do usuário">
+            <span class="user-avatar">{{ user.username|slice:":1"|upper }}</span>
+            <span class="user-name">{{ user.username }}</span>
+            <i class="ti ti-chevron-down user-menu-chevron" aria-hidden="true"></i>
+          </button>
+          <div class="user-dropdown" id="userDropdown" role="menu">
+            <div class="user-dropdown-header">
+              <span class="user-dropdown-avatar">{{ user.username|slice:":1"|upper }}</span>
+              <div>
+                <p class="user-dropdown-name">{{ user.username }}</p>
+                <p class="user-dropdown-role">{% if user.is_manager %}Gestão do grupo{% elif user.is_auditor %}Consulta e auditoria{% else %}Operação do participante{% endif %}</p>
+              </div>
+            </div>
+            <div class="user-dropdown-body">
+              <a href="{% url 'meu_perfil' %}" class="user-dropdown-item" role="menuitem">
+                <i class="ti ti-user" aria-hidden="true"></i> Meu perfil
+              </a>
+              <a href="{% url 'ajuda' %}" class="user-dropdown-item" role="menuitem">
+                <i class="ti ti-help-circle" aria-hidden="true"></i> Ajuda
+              </a>
+              <hr class="user-dropdown-divider">
+              <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="user-dropdown-item danger" role="menuitem">
+                  <i class="ti ti-logout" aria-hidden="true"></i> Sair
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
         {% else %}
         {% if request.path != '/login/' %}
@@ -591,6 +652,30 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
     }
   });
   applyDesktopState();
+})();
+
+(function() {
+  var btn = document.getElementById('userMenuBtn');
+  var dropdown = document.getElementById('userDropdown');
+  if (!btn || !dropdown) return;
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var open = dropdown.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', function(e) {
+    if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+      dropdown.classList.remove('is-open');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      dropdown.classList.remove('is-open');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.focus();
+    }
+  });
 })();
 </script>
 <style>

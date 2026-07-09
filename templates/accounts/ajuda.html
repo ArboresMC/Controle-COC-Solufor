@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block hero_text %}<p class="page-note"><i class="ti ti-info-circle" aria-hidden="true"></i>Respostas rápidas para as dúvidas mais comuns do sistema.</p>{% endblock %}
+{% block content %}
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Suporte</div>
+        <h2 class="card-title">Ajuda</h2>
+      </div>
+    </div>
+    <div class="stack">
+
+      <div class="info-box">
+        <strong>O que é o saldo elegível?</strong><br>
+        <span class="muted">É o volume disponível para venda, calculado a partir das entradas aprovadas descontando as saídas e transformações já registradas. Só entradas com status "Aprovado" entram no saldo elegível FSC.</span>
+      </div>
+
+      <div class="info-box">
+        <strong>Qual a diferença entre saldo elegível e saldo projetado?</strong><br>
+        <span class="muted">O saldo elegível considera apenas lançamentos aprovados pelo gestor. O saldo projetado inclui também os lançamentos ainda em análise (status "Enviado"), útil para planejar saídas antes da aprovação formal.</span>
+      </div>
+
+      <div class="info-box">
+        <strong>Por que o campo "Fornecedor de origem" está bloqueado na saída?</strong><br>
+        <span class="muted">O fornecedor é herdado automaticamente do lote de origem — é um requisito da cadeia de custódia FSC. Ele garante que a rastreabilidade do material seja preservada do início ao fim da cadeia.</span>
+      </div>
+
+      <div class="info-box">
+        <strong>O que é o lote na saída?</strong><br>
+        <span class="muted">O lote vincula cada saída a uma compra específica (entrada). Se deixar em branco, o sistema aloca automaticamente pelo método FIFO (primeiro a entrar, primeiro a sair). Preencha manualmente só se precisar vincular a uma entrada específica.</span>
+      </div>
+
+      <div class="info-box">
+        <strong>O sistema deu erro de conversão de unidade. O que fazer?</strong><br>
+        <span class="muted">Significa que não há fator de conversão cadastrado para esse produto entre as unidades informadas. Acesse Cadastros → Conversões e cadastre o fator entre as duas unidades — pode ser em qualquer direção (ex: t→m³ ou m³→t), o sistema calcula o inverso automaticamente.</span>
+      </div>
+
+      <div class="info-box">
+        <strong>O que é o fechamento mensal?</strong><br>
+        <span class="muted">É a confirmação formal de que todos os lançamentos do mês estão corretos. Após o fechamento ser aprovado pelo gestor, os registros do período ficam travados para auditoria. É necessário ter pelo menos um fechamento aprovado por competência.</span>
+      </div>
+
+      <div class="info-box">
+        <strong>Como funciona a transformação?</strong><br>
+        <span class="muted">A transformação registra a conversão de um produto em outro (ex: tora → madeira serrada). Você informa o produto destino e a quantidade produzida; o sistema calcula automaticamente o consumo da origem pelo rendimento cadastrado para aquele par de produtos.</span>
+      </div>
+
+      <div class="info-box">
+        <strong>Preciso de ajuda que não está aqui.</strong><br>
+        <span class="muted">Entre em contato com o administrador do sistema do seu grupo certificado.</span>
+      </div>
+
+    </div>
+  </div>
+  <div class="card soft">
+    <div class="card-header">
+      <div><div class="kicker">Acesso rápido</div><h2 class="card-title">Atalhos úteis</h2></div>
+    </div>
+    <div class="stack">
+      <div class="info-box"><a href="/transactions/entries/new/" style="color:var(--primary); font-weight:600;">Nova entrada</a><br><span class="muted">Registrar compra de matéria-prima certificada.</span></div>
+      <div class="info-box"><a href="/transactions/sales/new/" style="color:var(--primary); font-weight:600;">Nova saída</a><br><span class="muted">Registrar venda de produto certificado.</span></div>
+      <div class="info-box"><a href="/compliance/fechamentos/" style="color:var(--primary); font-weight:600;">Fechamentos</a><br><span class="muted">Ver e enviar o fechamento mensal.</span></div>
+      <div class="info-box"><a href="{% url 'meu_perfil' %}" style="color:var(--primary); font-weight:600;">Meu perfil</a><br><span class="muted">Ver dados da conta e trocar senha.</span></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

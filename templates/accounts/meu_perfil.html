@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block hero_text %}<p class="page-note"><i class="ti ti-info-circle" aria-hidden="true"></i>Informações da sua conta e acesso à troca de senha.</p>{% endblock %}
+{% block content %}
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="kicker">Conta</div>
+        <h2 class="card-title">Meu perfil</h2>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:0;">
+      {% include "includes/field_line.html" with field_label="Usuário" field_value=user.username %}
+      <div class="field-line">
+        <label>Papel</label>
+        <div>
+          {% if user.is_manager %}<span class="badge success">Gestão do grupo</span>
+          {% elif user.is_auditor %}<span class="badge warning">Consulta e auditoria</span>
+          {% else %}<span class="badge neutral">Operação do participante</span>{% endif %}
+        </div>
+      </div>
+      {% if user.participant %}
+      <div class="field-line">
+        <label>Participante</label>
+        <div>{{ user.participant.name }}</div>
+      </div>
+      {% endif %}
+      {% if user.organization %}
+      <div class="field-line">
+        <label>Organização</label>
+        <div>{{ user.organization.name }}</div>
+      </div>
+      {% endif %}
+      <div class="field-line">
+        <label>E-mail</label>
+        <div>{{ user.email|default:"Não informado" }}</div>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:24px;">
+      <a href="{% url 'trocar_senha' %}" class="btn">Trocar senha</a>
+    </div>
+  </div>
+  <div class="card soft">
+    <div class="card-header">
+      <div><div class="kicker">Segurança</div><h2 class="card-title">Boas práticas</h2></div>
+    </div>
+    <div class="stack">
+      <div class="info-box"><strong>Senha forte</strong><br><span class="muted">Use pelo menos 8 caracteres, misturando letras, números e símbolos.</span></div>
+      <div class="info-box"><strong>Não compartilhe seu acesso</strong><br><span class="muted">Cada usuário deve ter suas próprias credenciais — o sistema registra as ações por usuário.</span></div>
+      <div class="info-box"><strong>Dúvidas?</strong><br><span class="muted">Fale com o gestor do seu grupo ou acesse a <a href="{% url 'ajuda' %}">página de ajuda</a>.</span></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
