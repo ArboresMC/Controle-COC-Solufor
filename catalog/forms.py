@@ -14,6 +14,14 @@ class CounterpartyForm(forms.ModelForm):
     class Meta:
         model = Counterparty
         fields = ['participant', 'name', 'document_id', 'type']
+        labels = {
+            'name': 'Nome / Razão social',
+            'document_id': 'CNPJ / CPF',
+            'type': 'Tipo',
+        }
+        help_texts = {
+            'document_id': 'Informe o CNPJ ou CPF. O sistema usa esse campo para reconhecer automaticamente o fornecedor ao importar XML da NF-e.',
+        }
 
 
 class ProductUnitConversionForm(forms.ModelForm):
