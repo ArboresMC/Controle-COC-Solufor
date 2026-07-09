@@ -7,6 +7,7 @@ from .views import (
     DataManagementView, DataDeleteView, DataDeleteSingleView,
     BillingReportView, BillingTierUpdateView,
     parse_nfe_view,
+    NfeLoteView, parse_nfe_lote_view, importar_nfe_lote_view,
 )
 
 urlpatterns = [
@@ -26,4 +27,7 @@ urlpatterns = [
     path('gestor/faturamento/', BillingReportView.as_view(), name='billing_report'),
     path('gestor/faturamento/salvar/', BillingTierUpdateView.as_view(), name='billing_tier_update'),
     path('nfe/parse/', parse_nfe_view, name='nfe_parse'),
+    path('nfe/lote/', NfeLoteView.as_view(), name='nfe_lote'),
+    path('nfe/lote/parse/', parse_nfe_lote_view, name='nfe_parse_lote'),
+    path('nfe/lote/importar/', importar_nfe_lote_view, name='nfe_importar_lote'),
 ]

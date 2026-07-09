@@ -934,3 +934,201 @@ def parse_nfe_view(request):
         'itens': dados['itens'],
         'item_unico': dados['item_unico'],
     })
+
+
+class NfeLoteView(LoginRequiredMixin, TemplateView):
+    """Tela de importação de NF-e em lote."""
+    template_name = 'transactions/nfe_lote.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_manager or request.user.is_auditor or not request.user.participant:
+            return redirect('dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        import json
+        ctx = super().get_context_data(**kwargs)
+        from catalog.models import FSCClaim
+        produtos = list(Product.objects.filter(active=True).order_by('name').values('id', 'name', 'unit'))
+        fsc_claims = list(FSCClaim.objects.filter(active=True).order_by('sort_order', 'name').values('id', 'name'))
+        ctx['produtos'] = Product.objects.filter(active=True).order_by('name')
+        ctx['fsc_claims'] = FSCClaim.objects.filter(active=True).order_by('sort_order', 'name')
+        ctx['produtos_json'] = json.dumps(produtos)
+        ctx['fsc_json'] = json.dumps(fsc_claims)
+        return ctx
+
+
+@require_POST
+def parse_nfe_lote_view(request):
+    """
+    Endpoint AJAX: recebe múltiplos XMLs de NF-e, extrai dados de cada um
+    e retorna JSON com a lista de itens (uma linha por item de produto).
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Não autenticado.'}, status=403)
+
+    xml_files = request.FILES.getlist('xml_files')
+    if not xml_files:
+        return JsonResponse({'error': 'Nenhum arquivo enviado.'}, status=400)
+
+    from catalog.models import FSCClaim
+    itens = []
+    erros = []
+
+    for xml_file in xml_files:
+        if not xml_file.name.lower().endswith('.xml'):
+            erros.append(f'{xml_file.name}: não é um arquivo XML.')
+            continue
+        try:
+            dados = parse_nfe_xml(xml_file.read())
+        except ValueError as exc:
+            erros.append(f'{xml_file.name}: {exc}')
+            continue
+
+        # Tentar casar fornecedor pelo CNPJ
+        cnpj = dados['supplier_cnpj'].replace('.', '').replace('/', '').replace('-', '')
+        fornecedor_id = None
+        fornecedor_encontrado = False
+        qs = Counterparty.objects.filter(document_id__icontains=cnpj) if cnpj else Counterparty.objects.none()
+        if not qs.exists() and dados['supplier_name']:
+            qs = Counterparty.objects.filter(name__icontains=dados['supplier_name'][:20])
+        if qs.exists():
+            cp = qs.first()
+            fornecedor_id = cp.pk
+            fornecedor_encontrado = True
+
+        # Tentar casar FSC padrão (pega o primeiro ativo como sugestão inicial)
+        fsc_default = FSCClaim.objects.filter(active=True).order_by('sort_order', 'name').first()
+        fsc_id = fsc_default.pk if fsc_default else None
+
+        for item in dados['itens']:
+            warns = []
+            if not fornecedor_encontrado:
+                warns.append('Fornecedor')
+            if not item['unidade_mapeada']:
+                warns.append(f'Unidade ({item["unidade_nfe"]})')
+
+            itens.append({
+                'nf': dados['document_number'],
+                'data': dados['movement_date'],
+                'data_iso': _br_to_iso(dados['movement_date']),
+                'fornecedor_id': fornecedor_id,
+                'fornecedor_nome': dados['supplier_name'],
+                'fornecedor_cnpj': dados['supplier_cnpj'],
+                'fornecedor_encontrado': fornecedor_encontrado,
+                'descricao': item['descricao'],
+                'quantidade': item['quantidade'],
+                'unidade_nfe': item['unidade_nfe'],
+                'unidade_traceflor': item['unidade_traceflor'],
+                'unidade_mapeada': item['unidade_mapeada'],
+                'produto_id': None,
+                'fsc_id': fsc_id,
+                'warn': bool(warns) or not item['unidade_mapeada'],
+                'warns': warns,
+            })
+
+    return JsonResponse({'itens': itens, 'erros': erros})
+
+
+def _br_to_iso(date_br):
+    """Converte DD/MM/YYYY para YYYY-MM-DD."""
+    if date_br and '/' in date_br:
+        p = date_br.split('/')
+        if len(p) == 3:
+            return f'{p[2]}-{p[1]}-{p[0]}'
+    return date_br
+
+
+@require_POST
+def importar_nfe_lote_view(request):
+    """
+    Endpoint AJAX: recebe JSON com lista de entradas e cria no banco.
+    Cada item precisa de: nf, data (ISO), produto_id, fsc_id, quantidade, unidade.
+    """
+    import json as _json
+    from datetime import date as _date
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Não autenticado.'}, status=403)
+
+    user = request.user
+    participant = getattr(user, 'participant', None)
+    if not participant:
+        return JsonResponse({'error': 'Usuário sem participante vinculado.'}, status=403)
+
+    try:
+        body = _json.loads(request.body)
+        entradas = body.get('entradas', [])
+    except Exception:
+        return JsonResponse({'error': 'Corpo da requisição inválido.'}, status=400)
+
+    from catalog.models import FSCClaim
+    criadas = 0
+    erros = []
+
+    for i, entrada in enumerate(entradas):
+        try:
+            produto_id = entrada.get('produto_id')
+            if not produto_id:
+                erros.append(f'NF-e {entrada.get("nf", i+1)}: produto não selecionado.')
+                continue
+
+            produto = Product.objects.get(pk=produto_id)
+
+            # Fornecedor
+            fornecedor_id = entrada.get('fornecedor_id')
+            if fornecedor_id:
+                fornecedor = Counterparty.objects.get(pk=fornecedor_id)
+            else:
+                nome = (entrada.get('fornecedor_nome') or '').strip() or 'Não informado'
+                cnpj = (entrada.get('fornecedor_cnpj') or '').strip()
+                fornecedor, _ = Counterparty.objects.get_or_create(
+                    participant=participant,
+                    name=nome,
+                    defaults={'type': 'supplier', 'document_id': cnpj},
+                )
+
+            # FSC
+            fsc_nome = ''
+            fsc_id = entrada.get('fsc_id')
+            if fsc_id:
+                try:
+                    fsc_nome = FSCClaim.objects.get(pk=fsc_id).name
+                except FSCClaim.DoesNotExist:
+                    pass
+
+            # Data
+            from datetime import datetime
+            data_str = entrada.get('data', '')
+            try:
+                movimento_date = datetime.strptime(data_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                movimento_date = _date.today()
+
+            quantidade = to_decimal(str(entrada.get('quantidade', '0')))
+            unidade = entrada.get('unidade') or produto.unit
+            quantidade_base = convert_to_base(produto, quantidade, unidade)
+
+            with transaction.atomic():
+                obj = EntryRecord(
+                    participant=participant,
+                    created_by=user,
+                    document_number=entrada.get('nf', ''),
+                    movement_date=movimento_date,
+                    product=produto,
+                    supplier=fornecedor,
+                    quantity=quantidade,
+                    movement_unit=unidade,
+                    unit_snapshot=produto.unit,
+                    quantity_base=quantidade_base,
+                    fsc_claim=fsc_nome,
+                    status='submitted',
+                )
+                obj.save()
+                sync_entry_lot(obj)
+                criadas += 1
+
+        except Exception as exc:
+            erros.append(f'NF-e {entrada.get("nf", i+1)}: {exc}')
+
+    return JsonResponse({'criadas': criadas, 'erros': erros})

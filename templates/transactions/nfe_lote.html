@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block hero_text %}<p class="page-note"><i class="ti ti-info-circle" aria-hidden="true"></i>Selecione vários XMLs de uma vez. O sistema cria uma entrada para cada nota — ou para cada item se a nota tiver múltiplos produtos.</p>{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Importação em lote</div>
+      <h2 class="card-title">Importar NF-e em lote</h2>
+      <p class="card-subtitle">Arraste os arquivos XML ou clique para selecionar. Defina produto e declaração FSC padrão e ajuste linha a linha se necessário.</p>
+    </div>
+  </div>
+
+  <div id="drop-zone" class="lote-drop">
+    <i class="ti ti-file-type-xml lote-drop-icon" aria-hidden="true"></i>
+    <p class="lote-drop-title">Arraste os arquivos XML aqui</p>
+    <p class="lote-drop-sub">ou clique para selecionar vários arquivos de uma vez</p>
+    <label class="lote-upload-btn">
+      <i class="ti ti-upload" aria-hidden="true"></i> Selecionar XMLs
+      <input type="file" id="xml-files-input" accept=".xml" multiple style="display:none;">
+    </label>
+  </div>
+
+  <div id="lote-defaults" style="display:none;">
+    <div class="lote-defaults-bar">
+      <div>
+        <label class="lote-defaults-label">Produto padrão</label>
+        <select id="default-product">
+          <option value="">— selecionar —</option>
+          {% for p in produtos %}
+          <option value="{{ p.pk }}" data-unit="{{ p.unit }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="lote-defaults-label">Declaração FSC padrão</label>
+        <select id="default-fsc">
+          <option value="">— selecionar —</option>
+          {% for f in fsc_claims %}
+          <option value="{{ f.pk }}">{{ f.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="align-self:flex-end;">
+        <button type="button" id="apply-defaults-btn" class="lote-apply-btn">
+          <i class="ti ti-transfer" aria-hidden="true"></i> Aplicar a todas
+        </button>
+      </div>
+    </div>
+
+    <div id="lote-summary" class="lote-summary"></div>
+
+    <div class="table-wrap" style="overflow-x:auto; margin-bottom:20px;">
+      <table id="lote-table">
+        <thead>
+          <tr>
+            <th>NF-e</th>
+            <th>Data</th>
+            <th>Fornecedor</th>
+            <th>Descrição NF-e</th>
+            <th>Qtd</th>
+            <th>Un</th>
+            <th>Produto</th>
+            <th>FSC</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="lote-tbody"></tbody>
+      </table>
+    </div>
+
+    <div id="lote-actions" class="lote-actions">
+      <button type="button" id="btn-importar" class="btn">
+        <i class="ti ti-file-import" aria-hidden="true"></i> <span id="btn-importar-label">Importar entradas</span>
+      </button>
+      <a href="{% url 'entry_list' %}" class="btn secondary">Cancelar</a>
+    </div>
+
+    <div id="lote-resultado" style="display:none; margin-top:16px;"></div>
+  </div>
+</div>
+
+<style>
+.lote-drop { border: 2px dashed #5DCAA5; border-radius: 12px; background: #E1F5EE; padding: 36px; text-align: center; margin-bottom: 20px; transition: background .15s; }
+.lote-drop.drag-over { background: #c5eddf; border-color: #0F5F57; }
+.lote-drop-icon { font-size: 36px; color: #0F5F57; display: block; margin-bottom: 10px; }
+.lote-drop-title { font-size: 15px; font-weight: 700; color: #0C3F3A; margin: 0 0 4px; }
+.lote-drop-sub { font-size: 13px; color: #0F6E56; margin: 0 0 14px; }
+.lote-upload-btn { display: inline-flex; align-items: center; gap: 6px; background: #0F5F57; color: #fff; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.lote-defaults-bar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+.lote-defaults-label { font-size: 12px; font-weight: 700; color: #0f2a35; display: block; margin-bottom: 6px; }
+.lote-defaults-bar select { width: 100%; padding: 9px 12px; border: 1px solid #cce3dc; border-radius: 9px; font-size: 13px; color: #0f2a35; background: #fff; }
+.lote-apply-btn { display: inline-flex; align-items: center; gap: 6px; background: #E1F5EE; color: #0C3F3A; border: 1px solid #9FE1CB; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.lote-apply-btn:hover { background: #c5eddf; }
+.lote-summary { display: flex; align-items: center; gap: 16px; background: #f4f9f7; border-radius: 10px; padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: #0f2a35; }
+.lote-summary strong { color: #0C3F3A; }
+#lote-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#lote-table th { text-align: left; padding: 8px 10px; color: #6b8a96; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid #e2eeec; }
+#lote-table td { padding: 9px 10px; border-bottom: 0.5px solid #f0f6f4; color: #0f2a35; vertical-align: middle; }
+#lote-table tr.warn-row { background: #fffdf5; }
+#lote-table tr.ok-row { background: #fff; }
+#lote-table select { padding: 5px 8px; border: 1px solid #cce3dc; border-radius: 7px; font-size: 12px; color: #0f2a35; background: #fff; width: 100%; min-width: 130px; }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.badge-ok { background: #E1F5EE; color: #085041; }
+.badge-warn { background: #fff3d9; color: #7a4a0a; }
+.badge-err { background: #feeceb; color: #b42318; }
+.lote-actions { display: flex; gap: 10px; align-items: center; }
+.lote-resultado-ok { background: #E1F5EE; border: 1px solid #9FE1CB; border-radius: 10px; padding: 14px 16px; color: #085041; font-size: 14px; font-weight: 600; }
+.lote-resultado-err { background: #feeceb; border: 1px solid #fca99e; border-radius: 10px; padding: 14px 16px; color: #b42318; font-size: 13px; }
+</style>
+
+<script>
+(function() {
+  var input = document.getElementById('xml-files-input');
+  var dropZone = document.getElementById('drop-zone');
+  var defaultsSection = document.getElementById('lote-defaults');
+  var tbody = document.getElementById('lote-tbody');
+  var summary = document.getElementById('lote-summary');
+  var btnImportar = document.getElementById('btn-importar');
+  var btnLabel = document.getElementById('btn-importar-label');
+  var resultado = document.getElementById('lote-resultado');
+  var rows = []; // [{nf, data, fornecedor_id, fornecedor_nome, descricao, qtd, unidade, warn}]
+
+  // Produtos e FSC do contexto Django (injetados abaixo)
+  var PRODUTOS = {{ produtos_json|safe }};
+  var FSC_CLAIMS = {{ fsc_json|safe }};
+
+  // Drag & drop
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    processFiles(Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.xml')));
+  });
+  input.addEventListener('change', function() { processFiles(Array.from(input.files)); input.value = ''; });
+
+  function processFiles(files) {
+    if (!files.length) return;
+    var fd = new FormData();
+    files.forEach(function(f) { fd.append('xml_files', f); });
+    fd.append('csrfmiddlewaretoken', getCsrf());
+    btnImportar.disabled = true;
+    fetch('{% url "nfe_parse_lote" %}', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) { alert('Erro: ' + d.error); return; }
+        rows = rows.concat(d.itens);
+        renderTable();
+        defaultsSection.style.display = 'block';
+      })
+      .catch(function() { alert('Falha na comunicação com o servidor.'); })
+      .finally(function() { btnImportar.disabled = false; });
+  }
+
+  function renderTable() {
+    tbody.innerHTML = '';
+    var total = rows.length;
+    var warns = rows.filter(function(r) { return r.warn; }).length;
+    summary.innerHTML = '<strong>' + total + '</strong> entrada(s) a criar' +
+      (warns ? ' &nbsp;·&nbsp; <span style="color:#b45309"><strong>' + warns + '</strong> requer(em) atenção</span>' : '');
+    btnLabel.textContent = 'Importar ' + total + ' entrada(s)';
+
+    rows.forEach(function(row, idx) {
+      var tr = document.createElement('tr');
+      tr.className = row.warn ? 'warn-row' : 'ok-row';
+
+      var fornecedorCell = row.fornecedor_encontrado
+        ? '<span>' + esc(row.fornecedor_nome) + '</span>'
+        : '<span style="color:#b45309; font-weight:700;" title="CNPJ: ' + esc(row.fornecedor_cnpj) + '">' + esc(row.fornecedor_nome) + '</span>';
+
+      var produtoSelect = '<select data-idx="' + idx + '" class="sel-produto">' +
+        '<option value="">— selecionar —</option>' +
+        PRODUTOS.map(function(p) {
+          return '<option value="' + p.id + '" data-unit="' + p.unit + '"' +
+            (row.produto_id == p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+        }).join('') + '</select>';
+
+      var fscSelect = '<select data-idx="' + idx + '" class="sel-fsc">' +
+        '<option value="">— selecionar —</option>' +
+        FSC_CLAIMS.map(function(f) {
+          return '<option value="' + f.id + '"' + (row.fsc_id == f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>';
+        }).join('') + '</select>';
+
+      var warnList = row.warns || [];
+      var badgeHtml = warnList.length === 0
+        ? '<span class="badge badge-ok"><i class="ti ti-check" style="font-size:11px"></i> Pronto</span>'
+        : warnList.map(function(w) { return '<span class="badge badge-warn" style="margin-bottom:2px"><i class="ti ti-alert-triangle" style="font-size:11px"></i> ' + esc(w) + '</span>'; }).join('<br>');
+
+      tr.innerHTML = '<td>' + esc(row.nf) + '</td>' +
+        '<td style="white-space:nowrap">' + esc(row.data) + '</td>' +
+        '<td>' + fornecedorCell + '</td>' +
+        '<td style="color:#6b8a96; font-size:12px;">' + esc(row.descricao) + '</td>' +
+        '<td style="white-space:nowrap">' + esc(row.quantidade) + '</td>' +
+        '<td>' + esc(row.unidade_traceflor || row.unidade_nfe) + '</td>' +
+        '<td>' + produtoSelect + '</td>' +
+        '<td>' + fscSelect + '</td>' +
+        '<td>' + badgeHtml + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    // Atualizar dados ao mudar selects
+    tbody.querySelectorAll('.sel-produto').forEach(function(sel) {
+      sel.addEventListener('change', function() {
+        var idx = parseInt(sel.getAttribute('data-idx'));
+        rows[idx].produto_id = sel.value;
+        rows[idx].warn = isWarn(rows[idx]);
+      });
+    });
+    tbody.querySelectorAll('.sel-fsc').forEach(function(sel) {
+      sel.addEventListener('change', function() {
+        var idx = parseInt(sel.getAttribute('data-idx'));
+        rows[idx].fsc_id = sel.value;
+        rows[idx].warn = isWarn(rows[idx]);
+      });
+    });
+  }
+
+  function isWarn(row) {
+    return !row.produto_id || !row.fsc_id || !row.fornecedor_encontrado;
+  }
+
+  // Aplicar padrão a todas
+  document.getElementById('apply-defaults-btn').addEventListener('click', function() {
+    var pid = document.getElementById('default-product').value;
+    var fid = document.getElementById('default-fsc').value;
+    rows.forEach(function(r) {
+      if (pid) r.produto_id = pid;
+      if (fid) r.fsc_id = fid;
+      r.warn = isWarn(r);
+    });
+    renderTable();
+  });
+
+  // Importar
+  btnImportar.addEventListener('click', function() {
+    if (!rows.length) return;
+    var payload = rows.map(function(r, idx) {
+      var selProd = tbody.querySelectorAll('.sel-produto')[idx];
+      var selFsc = tbody.querySelectorAll('.sel-fsc')[idx];
+      return {
+        nf: r.nf,
+        data: r.data_iso,
+        fornecedor_id: r.fornecedor_id || null,
+        fornecedor_nome: r.fornecedor_nome,
+        fornecedor_cnpj: r.fornecedor_cnpj,
+        produto_id: selProd ? selProd.value : r.produto_id,
+        fsc_id: selFsc ? selFsc.value : r.fsc_id,
+        quantidade: r.quantidade,
+        unidade: r.unidade_traceflor || 'm3',
+      };
+    });
+    btnImportar.disabled = true;
+    btnImportar.textContent = 'Importando...';
+    fetch('{% url "nfe_importar_lote" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({ entradas: payload }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      resultado.style.display = 'block';
+      if (d.criadas !== undefined) {
+        resultado.innerHTML = '<div class="lote-resultado-ok"><i class="ti ti-check-circle" style="font-size:18px; vertical-align:-3px; margin-right:8px;"></i>' +
+          d.criadas + ' entrada(s) criada(s) com sucesso.' +
+          (d.erros && d.erros.length ? ' &nbsp;·&nbsp; ' + d.erros.length + ' com erro.' : '') +
+          ' &nbsp;<a href="{% url "entry_list" %}" style="color:#0F5F57; font-weight:700;">Ver entradas →</a></div>';
+        if (d.erros && d.erros.length) {
+          resultado.innerHTML += '<div class="lote-resultado-err" style="margin-top:10px;"><strong>Erros:</strong><ul style="margin:6px 0 0; padding-left:20px;">' +
+            d.erros.map(function(e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul></div>';
+        }
+        rows = [];
+        tbody.innerHTML = '';
+        summary.innerHTML = '';
+      } else {
+        resultado.innerHTML = '<div class="lote-resultado-err">Erro ao importar: ' + esc(d.error || 'Erro desconhecido') + '</div>';
+      }
+    })
+    .catch(function() {
+      resultado.innerHTML = '<div class="lote-resultado-err">Falha na comunicação com o servidor.</div>';
+      resultado.style.display = 'block';
+    })
+    .finally(function() {
+      btnImportar.disabled = false;
+      btnLabel.textContent = 'Importar entradas';
+    });
+  });
+
+  function getCsrf() {
+    var el = document.querySelector('[name="csrfmiddlewaretoken"]');
+    if (el) return el.value;
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+  }
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
+</script>
+{% csrf_token %}
+{% endblock %}
