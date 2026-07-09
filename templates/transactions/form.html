@@ -97,22 +97,21 @@
       </div>
     </div>
     <div class="stack">
+      {% if form.supplier and not form.supplier.field.disabled %}
       <div class="info-box"><strong>Importação via XML da NF-e</strong><br><span class="muted">Clique em "Importar XML" para pré-preencher os campos automaticamente. O arquivo .xml vem junto com a nota fiscal eletrônica do seu fornecedor.</span></div>
+      {% endif %}
       <div class="info-box"><strong>Produto e unidade</strong><br><span class="muted">Informe a unidade utilizada no documento. O sistema converte para a unidade base do produto.</span></div>
       <div class="info-box"><strong>Documentação</strong><br><span class="muted">Sempre que possível, anexe a nota fiscal ou o documento comprobatório do lançamento.</span></div>
       <div class="info-box"><strong>Consistência</strong><br><span class="muted">Em saídas, o sistema compara a quantidade com o saldo disponível, mantém o fornecedor de origem travado conforme o lote e bloqueia extrapolações.</span></div>
       {% if available_lots %}
-      <div class="info-box"><strong>Alocação manual disponível</strong><br><span class="muted">Selecione um lote específico no campo de alocação manual para vincular a venda a uma compra ou transformação determinada.</span></div>
-      <div class="table-wrap"><table>
-        <tr><th>Lote</th><th>Fornecedor / origem</th><th>Saldo disponível</th></tr>
-        {% for item in available_lots %}
-        <tr>
-          <td>{{ item.source_label }}</td>
-          <td>{{ item.supplier }}</td>
-          <td>{{ item.remaining }} {{ item.unit }}</td>
-        </tr>
-        {% endfor %}
-      </table></div>
+      <div class="info-box"><strong>Saldo disponível por lote</strong><br><span class="muted">Selecione um lote específico para vincular a venda a uma compra ou transformação determinada.</span></div>
+      {% for item in available_lots %}
+      <div style="background:#f4f9f7; border:1px solid #d6e6ec; border-radius:12px; padding:12px 14px;">
+        <div style="font-size:13px; font-weight:700; color:#0f2a35; margin-bottom:2px;">{{ item.source_label }}</div>
+        <div style="font-size:12px; color:#6b8a96; margin-bottom:6px;">{{ item.supplier }}</div>
+        <div style="font-size:15px; font-weight:700; color:#0F5F57;">{{ item.remaining }} {{ item.unit }}</div>
+      </div>
+      {% endfor %}
       {% endif %}
     </div>
   </div>
