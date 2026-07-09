@@ -9,8 +9,17 @@ class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
         return self.request.user.is_manager
 
-class ProductListView(ManagerRequiredMixin, ListView):
+class ParticipantOrManagerMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Permite acesso a gestores e participantes ativos. Auditor fica de fora."""
+    def test_func(self):
+        user = self.request.user
+        return user.is_manager or (user.is_participant_user and bool(getattr(user, 'participant', None)))
+
+class ProductListView(ParticipantOrManagerMixin, ListView):
     model = Product; template_name = 'catalog/product_list.html'; context_object_name = 'products'
+    def get_queryset(self):
+        # Participante ve apenas produtos ativos (nao filtra por org, produtos sao globais)
+        return Product.objects.filter(active=True).order_by('name')
 
 class ProductCreateView(ManagerRequiredMixin, CreateView):
     model = Product; form_class = ProductForm; template_name = 'catalog/product_form.html'; success_url = reverse_lazy('product_list')
@@ -20,29 +29,56 @@ class ProductUpdateView(ManagerRequiredMixin, UpdateView):
     model = Product; form_class = ProductForm; template_name = 'catalog/product_form.html'; success_url = reverse_lazy('product_list')
     def form_valid(self, form): messages.success(self.request, 'Produto atualizado com sucesso.'); return super().form_valid(form)
 
-class CounterpartyListView(ManagerRequiredMixin, ListView):
+class CounterpartyListView(ParticipantOrManagerMixin, ListView):
     model = Counterparty; template_name = 'catalog/counterparty_list.html'; context_object_name = 'counterparties'
     def get_queryset(self):
-        org = getattr(self.request.user, 'current_organization', None)
+        user = self.request.user
         qs = Counterparty.objects.select_related('participant').order_by('name')
-        return qs.filter(participant__organization=org) if org else qs.none()
+        if user.is_manager:
+            org = getattr(user, 'current_organization', None)
+            return qs.filter(participant__organization=org) if org else qs.none()
+        # Participante ve apenas as contrapartes do proprio participante
+        return qs.filter(participant=user.participant)
 
-class CounterpartyCreateView(ManagerRequiredMixin, CreateView):
+class CounterpartyCreateView(ParticipantOrManagerMixin, CreateView):
     model = Counterparty; form_class = CounterpartyForm; template_name = 'catalog/counterparty_form.html'; success_url = reverse_lazy('counterparty_list')
     def get_form(self, form_class=None):
-        form = super().get_form(form_class); org = getattr(self.request.user, 'current_organization', None)
-        if 'participant' in form.fields: form.fields['participant'].queryset = form.fields['participant'].queryset.filter(organization=org)
+        form = super().get_form(form_class)
+        user = self.request.user
+        org = getattr(user, 'current_organization', None)
+        if 'participant' in form.fields:
+            if user.is_participant_user:
+                # Participante nao ve nem escolhe o participante — preenchido automaticamente
+                form.fields['participant'].widget = form.fields['participant'].widget.__class__(attrs={'style': 'display:none'})
+                form.fields['participant'].required = False
+                form.fields['participant'].label = ''
+            else:
+                form.fields['participant'].queryset = form.fields['participant'].queryset.filter(organization=org)
         return form
-    def form_valid(self, form): messages.success(self.request, 'Cliente/fornecedor criado com sucesso.'); return super().form_valid(form)
+    def form_valid(self, form):
+        obj = form.save(commit=False)
+        # Participante vincula automaticamente ao proprio participante
+        if self.request.user.is_participant_user and not obj.participant_id:
+            obj.participant = self.request.user.participant
+        obj.save()
+        messages.success(self.request, 'Cliente/fornecedor criado com sucesso.')
+        from django.shortcuts import redirect
+        return redirect(self.success_url)
 
-class CounterpartyUpdateView(ManagerRequiredMixin, UpdateView):
+class CounterpartyUpdateView(ParticipantOrManagerMixin, UpdateView):
     model = Counterparty; form_class = CounterpartyForm; template_name = 'catalog/counterparty_form.html'; success_url = reverse_lazy('counterparty_list')
     def get_queryset(self):
-        org = getattr(self.request.user, 'current_organization', None)
-        return Counterparty.objects.select_related('participant').filter(participant__organization=org) if org else Counterparty.objects.none()
+        user = self.request.user
+        qs = Counterparty.objects.select_related('participant')
+        if user.is_manager:
+            org = getattr(user, 'current_organization', None)
+            return qs.filter(participant__organization=org) if org else qs.none()
+        return qs.filter(participant=user.participant)
     def get_form(self, form_class=None):
-        form = super().get_form(form_class); org = getattr(self.request.user, 'current_organization', None)
-        if 'participant' in form.fields: form.fields['participant'].queryset = form.fields['participant'].queryset.filter(organization=org)
+        form = super().get_form(form_class)
+        org = getattr(self.request.user, 'current_organization', None)
+        if 'participant' in form.fields:
+            form.fields['participant'].queryset = form.fields['participant'].queryset.filter(organization=org)
         return form
     def form_valid(self, form): messages.success(self.request, 'Cliente/fornecedor atualizado com sucesso.'); return super().form_valid(form)
 
