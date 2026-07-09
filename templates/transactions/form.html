@@ -185,6 +185,17 @@
     el.value = value;
   }
 
+  function setDateField(name, value) {
+    // value vem como "DD/MM/YYYY" do parser, input[type=date] espera "YYYY-MM-DD"
+    var el = document.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    if (value && value.indexOf('/') !== -1) {
+      var p = value.split('/');
+      if (p.length === 3) { el.value = p[2] + '-' + p[1] + '-' + p[0]; return; }
+    }
+    el.value = value;
+  }
+
   function setCsrf() {
     var el = document.querySelector('[name="csrfmiddlewaretoken"]');
     return el ? el.value : '';
@@ -213,7 +224,7 @@
       }
 
       // Preenche campos certos
-      setField('movement_date', d.movement_date);
+      setDateField('movement_date', d.movement_date);
       setField('document_number', d.document_number);
 
       // Fornecedor
