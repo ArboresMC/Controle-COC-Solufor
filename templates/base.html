@@ -86,14 +86,6 @@ a:hover { text-decoration: underline; }
   width: 22px; min-width:22px; text-align:center; display:inline-flex; align-items:center; justify-content:center;
 }
 .sidebar-icon i { font-size: 18px; color: #C9A227; opacity: .9; }
-.sidebar-footer {
-  padding: 14px 12px 18px; border-top: 1px solid rgba(255,255,255,.08);
-}
-.sidebar-user {
-  background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 12px;
-}
-.sidebar-user strong { display:block; font-size:14px; }
-.sidebar-user span, .sidebar-user a { color: rgba(255,255,255,.76); font-size:12px; }
 .content-shell { flex:1; min-width:0; display:flex; flex-direction:column; }
 .topbar {
   position: sticky; top: 0; z-index: 10;
@@ -359,10 +351,7 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
 .sidebar.is-collapsed { width: var(--sidebar-collapsed-w); }
 .sidebar.is-collapsed .brand-copy,
 .sidebar.is-collapsed .sidebar-label,
-.sidebar.is-collapsed .sidebar-link-text,
-.sidebar.is-collapsed .sidebar-user strong,
-.sidebar.is-collapsed .sidebar-user span,
-.sidebar.is-collapsed .sidebar-user a {
+.sidebar.is-collapsed .sidebar-link-text {
   display:none;
 }
 .sidebar.is-collapsed .sidebar-header { align-items:center; }
@@ -507,16 +496,6 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
           </nav>
         </div>
         {% endif %}
-      </div>
-      <div class="sidebar-footer">
-        <div class="sidebar-user">
-          <strong>{{ user.username }}</strong>
-          <span>{% if user.is_manager %}Gestão do grupo certificado{% elif user.is_auditor %}Consulta e auditoria{% else %}Operação do participante{% endif %}</span><br>
-          <form method="post" action="{% url 'logout' %}" style="display:inline;">
-             {% csrf_token %}
-             <button type="submit" class="logout-btn">Sair</button>
-          </form>
-        </div>
       </div>
     </div>
   </aside>
