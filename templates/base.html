@@ -430,6 +430,13 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
             <a class="sidebar-link {% if '/reports/import/' in request.path %}is-active{% endif %}" href="/reports/import/"><span class="sidebar-icon"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i></span><span class="sidebar-link-text">Importar planilha</span></a>
           </nav>
         </div>
+        <div class="sidebar-section">
+          <div class="sidebar-label">Cadastros</div>
+          <nav class="sidebar-nav">
+            <a class="sidebar-link {% if '/catalog/counterparties/' in request.path %}is-active{% endif %}" href="/catalog/counterparties/"><span class="sidebar-icon"><i class="ti ti-users" aria-hidden="true"></i></span><span class="sidebar-link-text">Fornecedores e Clientes</span></a>
+            <a class="sidebar-link {% if '/catalog/products/' in request.path %}is-active{% endif %}" href="/catalog/products/"><span class="sidebar-icon"><i class="ti ti-package" aria-hidden="true"></i></span><span class="sidebar-link-text">Produtos</span></a>
+          </nav>
+        </div>
         {% endif %}
         {% if user.participant.ativo_fm and not user.is_manejo_multi %}
         <div class="sidebar-section">
