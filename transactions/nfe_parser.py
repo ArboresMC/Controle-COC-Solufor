@@ -3,6 +3,8 @@ Parser de XML da NF-e (versao 4.0) para pre-preenchimento do formulario de Entra
 Extrai: numero do documento, data de emissao, emitente (fornecedor), produto,
 quantidade e unidade comercial. Nao depende de nenhuma API externa.
 """
+import re
+import unicodedata
 import xml.etree.ElementTree as ET
 from decimal import Decimal, InvalidOperation
 
@@ -21,6 +23,52 @@ UNIT_MAP = {
     'ST': 'mst', 'MST': 'mst', 'M.ST': 'mst', 'M.ST.': 'mst',
     'ESTERE': 'mst', 'ESTEREO': 'mst', 'ESTÉREO': 'mst',
 }
+
+# Palavras irrelevantes para comparação (stopwords do domínio)
+_STOPWORDS = {
+    'de', 'e', 'da', 'do', 'das', 'dos', 'em', 'a', 'o', 'as', 'os',
+    'fsc', '100', 'mix', 'credito', 'controlado', 'por', 'cento',
+    'categoria', 'certificado', 'certificada', 'classe',
+}
+
+
+def _normalizar(texto):
+    """Remove acentos, pontuação e converte para minúsculas para comparação."""
+    texto = unicodedata.normalize('NFKD', texto)
+    texto = texto.encode('ascii', 'ignore').decode('ascii')
+    texto = re.sub(r'[^a-z0-9\s]', ' ', texto.lower())
+    return set(w for w in texto.split() if w not in _STOPWORDS and len(w) > 1)
+
+
+def sugerir_produto(descricao_nfe, produtos):
+    """
+    Tenta casar a descrição do produto na NF-e com os produtos cadastrados.
+
+    produtos: lista de dicts com {'id': int, 'name': str}
+
+    Retorna o produto com maior score de palavras em comum, ou None se
+    nenhum tiver pelo menos 1 palavra significativa em comum.
+    """
+    palavras_nfe = _normalizar(descricao_nfe)
+    if not palavras_nfe:
+        return None
+
+    melhor_id = None
+    melhor_score = 0
+
+    for p in produtos:
+        palavras_produto = _normalizar(p['name'])
+        if not palavras_produto:
+            continue
+        intersecao = palavras_nfe & palavras_produto
+        # Score = palavras em comum / palavras do produto cadastrado
+        # Favorece produtos cujo nome é mais completamente coberto pela NF-e
+        score = len(intersecao) / len(palavras_produto)
+        if score > melhor_score and len(intersecao) >= 1:
+            melhor_score = score
+            melhor_id = p['id']
+
+    return melhor_id if melhor_score > 0 else None
 
 
 def _find(element, tag, ns=_NS):

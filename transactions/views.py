@@ -972,6 +972,11 @@ def parse_nfe_lote_view(request):
         return JsonResponse({'error': 'Nenhum arquivo enviado.'}, status=400)
 
     from catalog.models import FSCClaim
+    from .nfe_parser import sugerir_produto
+
+    # Carrega produtos uma vez só, fora do loop
+    produtos_cadastrados = list(Product.objects.filter(active=True).values('id', 'name'))
+
     itens = []
     erros = []
 
@@ -1008,6 +1013,9 @@ def parse_nfe_lote_view(request):
             if not item['unidade_mapeada']:
                 warns.append(f'Unidade ({item["unidade_nfe"]})')
 
+            # Sugerir produto por similaridade com a descrição da NF-e
+            produto_sugerido_id = sugerir_produto(item['descricao'], produtos_cadastrados)
+
             itens.append({
                 'nf': dados['document_number'],
                 'data': dados['movement_date'],
@@ -1021,7 +1029,7 @@ def parse_nfe_lote_view(request):
                 'unidade_nfe': item['unidade_nfe'],
                 'unidade_traceflor': item['unidade_traceflor'],
                 'unidade_mapeada': item['unidade_mapeada'],
-                'produto_id': None,
+                'produto_id': produto_sugerido_id,
                 'fsc_id': fsc_id,
                 'warn': bool(warns) or not item['unidade_mapeada'],
                 'warns': warns,
