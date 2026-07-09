@@ -15,7 +15,7 @@ from participants.models import Participant
 from .forms import EntryRecordForm, SaleRecordForm, TransformationRecordForm
 from .models import EntryRecord, SaleRecord, TransformationRecord
 from .nfe_parser import parse_nfe_xml
-from .services import convert_to_base, get_available_balance, get_balance_items, get_balance_summary_for_participants, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot
+from .services import convert_to_base, get_available_balance, get_balance_items, get_balance_summary_for_participants, get_manager_alerts, get_participant_alerts, get_participant_balance_summary, reallocate_sale, reallocate_transformation_sources, sync_entry_lot, sync_transformation_metadata, sync_transformation_target_lot, to_decimal
 
 class ManagerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
