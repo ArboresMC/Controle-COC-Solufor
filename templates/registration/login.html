@@ -4,34 +4,49 @@
 {% block content %}
 <section class="login-shell">
   <div class="login-hero">
-    <div class="login-hero-logo" style="margin-bottom:20px; text-align:left;">
-      <img class="login-logo" src="{% static 'img/brand/assinatura-horizontal-branca.svg' %}" alt="TraceFlor"
-           style="display:block; height:64px; width:auto; object-fit:contain;">
+    <div>
+      <div class="login-hero-logo">
+        <div class="login-hero-icon">
+          <i class="ti ti-leaf" style="font-size:22px; color:#C9A227;" aria-hidden="true"></i>
+        </div>
+        <span class="login-hero-name">TraceFlor</span>
+      </div>
+      <div class="kicker" style="color:rgba(255,255,255,.5); margin-bottom:10px;">Acesso seguro</div>
+      <h1 style="color:#fff; font-size:26px; font-weight:700; line-height:1.2; margin:0 0 14px;">A Rastreabilidade Florestal Sistematizada</h1>
+      <p style="color:rgba(255,255,255,.75); font-size:14px; line-height:1.6; margin:0;">Controle de cadeia de custódia FSC com rastreabilidade completa, do lote à nota fiscal.</p>
     </div>
-    <div class="kicker" style="color: rgba(255,255,255,.82);">Acesso seguro</div>
-    <h1>A Rastreabilidade Florestal Sistematizada</h1>
-    <p>Registre entradas, saídas e transformações com rastreabilidade completa e saldo elegível sempre atualizado.</p>
-    <ul>
-      <li>Entradas, saídas e transformações</li>
-      <li>Rastreabilidade pronta para auditoria</li>
-      <li>Controle operacional em tempo real</li>
-    </ul>
+    <div class="login-hero-bullets">
+      <div class="login-hero-bullet"><span class="login-hero-dot"></span>Entradas, saídas e transformações</div>
+      <div class="login-hero-bullet"><span class="login-hero-dot"></span>Rastreabilidade pronta para auditoria</div>
+      <div class="login-hero-bullet"><span class="login-hero-dot"></span>Saldo elegível sempre atualizado</div>
+    </div>
   </div>
   <div class="card login-card">
     <div class="card-header">
       <div>
-        <div class="kicker">Login</div>
+        <div class="kicker">Portal operacional</div>
         <h2 class="card-title">Entrar</h2>
-        <p class="card-subtitle">Acesse o portal operacional.</p>
+        <p class="card-subtitle">Informe suas credenciais de acesso.</p>
       </div>
     </div>
-    <form method="post">
+    <form method="post" novalidate>
       {% csrf_token %}
-      {{ form.as_p }}
+      {% if form.errors %}
+      <div class="login-error">
+        <i class="ti ti-alert-circle" aria-hidden="true"></i>
+        <span>Usuário ou senha incorretos. Verifique e tente novamente.</span>
+      </div>
+      {% endif %}
+      {% for field in form %}
+        {% include "includes/field_line.html" with field=field %}
+      {% endfor %}
       <div class="actions">
-        <button type="submit" class="btn">Entrar</button>
+        <button type="submit" class="btn" style="width:100%;">Entrar</button>
       </div>
     </form>
+    <a class="login-forgot" href="#" aria-disabled="true" style="pointer-events:none; opacity:.5;">
+      Esqueci minha senha — em breve
+    </a>
   </div>
 </section>
 {% endblock %}

@@ -339,12 +339,26 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
 .listing-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
 .split { display:grid; grid-template-columns: 1.2fr .8fr; gap:18px; }
 .info-box { background: #f4f9f7; border:1px solid var(--line); border-radius: 16px; padding: 16px; }
-.login-shell { max-width: 980px; margin: 36px auto 0; display:grid; grid-template-columns: 1.15fr .85fr; gap: 18px; }
+.login-shell { max-width: 980px; margin: 36px auto 0; display:grid; grid-template-columns: 1.1fr .9fr; gap: 18px; }
 .login-hero {
-  background: linear-gradient(135deg, #0C4943 0%, #14776D 100%); color: white; border-radius: 24px; padding: 34px; box-shadow: var(--shadow);
+  background: #0F5F57; color: white; border-radius: 20px; padding: 34px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; justify-content: space-between;
 }
-.login-hero ul { padding-left: 18px; color: rgba(255,255,255,.88); }
+.login-hero-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; }
+.login-hero-icon { width: 42px; height: 42px; border-radius: 50%; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.login-hero-name { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; font-family: 'Space Grotesk', sans-serif; }
+.login-hero-bullets { margin-top: 32px; display: flex; flex-direction: column; gap: 10px; }
+.login-hero-bullet { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgba(255,255,255,.72); }
+.login-hero-dot { width: 6px; height: 6px; border-radius: 50%; background: #C9A227; flex-shrink: 0; }
 .login-card { max-width: none; margin: 0; }
+.login-error {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: #feeceb; border: 1px solid #fca99e; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 20px;
+}
+.login-error i { color: var(--danger); font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.login-error span { font-size: 13px; color: var(--danger); font-weight: 600; line-height: 1.4; }
+.login-forgot { display: block; text-align: center; margin-top: 14px; font-size: 13px; color: var(--muted); text-decoration: none; }
 .compact-table table { min-width: 100%; }
 .brand-copy { min-width: 0; flex: 1; }
 .brand-copy strong { display:block; font-size: 14px; line-height: 1.25; }
@@ -658,8 +672,7 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
 })();
 </script>
 <style>
-.hero,
-.login-hero {
+.hero {
   background: linear-gradient(135deg, #0C4943 0%, #14776D 100%) !important;
 }
 .topbar {
