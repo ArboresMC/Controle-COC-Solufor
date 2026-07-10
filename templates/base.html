@@ -244,9 +244,18 @@ tr:hover td { background: #eff7f4; }
 .inline-link { font-weight: 700; }
 .messages { list-style: none; padding: 0; margin: 0 0 18px; }
 .messages li {
-  background: var(--success-soft); border: 1px solid rgba(21,128,61,.12); color: var(--success);
-  padding: 14px 16px; border-radius: 14px; font-weight: 600;
+  background: var(--success-soft); border: 1px solid rgba(21,128,61,.18); color: var(--success);
+  padding: 12px 16px; border-radius: 12px; font-weight: 600; font-size: 14px;
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+  transition: opacity .4s ease, transform .4s ease;
 }
+.messages li.msg-warning { background: var(--warning-soft); border-color: rgba(180,83,9,.18); color: var(--warning); }
+.messages li.msg-error { background: var(--danger-soft); border-color: rgba(180,35,24,.18); color: var(--danger); }
+.messages li .msg-icon { font-size: 16px; flex-shrink: 0; }
+.messages li .msg-text { flex: 1; }
+.messages li .msg-close { background: none; border: none; cursor: pointer; color: inherit; opacity: .6; padding: 0; font-size: 16px; line-height: 1; flex-shrink: 0; }
+.messages li .msg-close:hover { opacity: 1; }
+.messages li.msg-hiding { opacity: 0; transform: translateY(-4px); }
 .badge, .balance {
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 800;
@@ -598,9 +607,13 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
       {% endif %}
 
       {% if messages %}
-        <ul class="messages">
+        <ul class="messages" id="django-messages">
           {% for message in messages %}
-            <li>{{ message }}</li>
+            <li class="{% if message.tags == 'warning' %}msg-warning{% elif message.tags == 'error' %}msg-error{% endif %}">
+              <i class="ti {% if message.tags == 'warning' %}ti-alert-triangle{% elif message.tags == 'error' %}ti-alert-circle{% else %}ti-circle-check{% endif %} msg-icon" aria-hidden="true"></i>
+              <span class="msg-text">{{ message }}</span>
+              <button class="msg-close" onclick="dismissMsg(this)" aria-label="Fechar"><i class="ti ti-x" aria-hidden="true"></i></button>
+            </li>
           {% endfor %}
         </ul>
       {% endif %}
@@ -653,6 +666,21 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
     }
   });
   applyDesktopState();
+})();
+
+function dismissMsg(btn) {
+  var li = btn.closest('li');
+  li.classList.add('msg-hiding');
+  setTimeout(function() { li.remove(); }, 400);
+}
+(function() {
+  var msgs = document.querySelectorAll('#django-messages li');
+  msgs.forEach(function(li, i) {
+    setTimeout(function() {
+      li.classList.add('msg-hiding');
+      setTimeout(function() { li.remove(); }, 400);
+    }, 4000 + i * 500);
+  });
 })();
 
 (function() {
