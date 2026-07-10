@@ -23,6 +23,12 @@ class CounterpartyForm(forms.ModelForm):
             'document_id': 'Informe o CNPJ ou CPF. O sistema usa esse campo para reconhecer automaticamente o fornecedor ao importar XML da NF-e.',
         }
 
+    def clean_document_id(self):
+        """Remove formatação (pontos, barras, traços) antes de salvar — só dígitos no banco."""
+        import re
+        value = self.cleaned_data.get('document_id', '')
+        return re.sub(r'\D', '', value)
+
 
 class ProductUnitConversionForm(forms.ModelForm):
     class Meta:

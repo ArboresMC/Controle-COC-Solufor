@@ -1,4 +1,91 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card" style="max-width: 860px;"><div class="card-header"><div><div class="kicker">Cadastros auxiliares</div><h2 class="card-title">{% if form.instance.pk %}Editar cadastro{% else %}Novo cliente ou fornecedor{% endif %}</h2><p class="card-subtitle">Use esse cadastro para documentos de compra, venda e movimentações rastreáveis.</p></div></div><form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="btn" type="submit">Salvar cadastro</button><a class="btn secondary" href="/catalog/counterparties/">Cancelar</a></div></form></div>
+<div class="card" style="max-width:860px;">
+  <div class="card-header">
+    <div>
+      <div class="kicker">Cadastros auxiliares</div>
+      <h2 class="card-title">{% if form.instance.pk %}Editar cadastro{% else %}Novo cliente ou fornecedor{% endif %}</h2>
+      <p class="card-subtitle">Use esse cadastro para documentos de compra, venda e movimentações rastreáveis.</p>
+    </div>
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/field_line.html" with field=form.name %}
+    <div class="field-line">
+      <label for="{{ form.document_id.id_for_label }}">
+        {{ form.document_id.label }}
+        {% if form.document_id.field.help_text %}
+          <i class="ti ti-info-circle field-help-icon" title="{{ form.document_id.field.help_text }}"></i>
+        {% endif %}
+      </label>
+      <div>
+        <input type="text"
+               name="{{ form.document_id.html_name }}"
+               id="{{ form.document_id.id_for_label }}"
+               value="{{ form.document_id.value|default:'' }}"
+               maxlength="18"
+               placeholder="00.000.000/0000-00 ou 000.000.000-00"
+               autocomplete="off">
+        {% if form.document_id.errors %}
+          <ul class="errorlist">{% for e in form.document_id.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+    </div>
+    {% include "includes/field_line.html" with field=form.type %}
+    {% if form.participant.field and not form.participant.field.widget.attrs.style %}
+      {% include "includes/field_line.html" with field=form.participant %}
+    {% endif %}
+    <div class="actions">
+      <button class="btn" type="submit">Salvar cadastro</button>
+      <a class="btn secondary" href="/catalog/counterparties/">Cancelar</a>
+    </div>
+  </form>
+</div>
+<script>
+(function() {
+  var input = document.getElementById('{{ form.document_id.id_for_label }}');
+  if (!input) return;
+
+  function onlyDigits(v) { return v.replace(/\D/g, ''); }
+
+  function maskCPF(v) {
+    v = v.slice(0, 11);
+    return v.replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+
+  function maskCNPJ(v) {
+    v = v.slice(0, 14);
+    return v.replace(/(\d{2})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1/$2')
+            .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+
+  function applyMask(v) {
+    var d = onlyDigits(v);
+    if (d.length <= 11) return maskCPF(d);
+    return maskCNPJ(d);
+  }
+
+  // Aplica máscara ao valor já existente (edição)
+  if (input.value) {
+    input.value = applyMask(input.value);
+  }
+
+  input.addEventListener('input', function() {
+    var pos = input.selectionStart;
+    var old = input.value;
+    input.value = applyMask(input.value);
+    // Mantém o cursor na posição correta após formatação
+    var diff = input.value.length - old.length;
+    input.setSelectionRange(pos + diff, pos + diff);
+  });
+
+  input.addEventListener('blur', function() {
+    input.value = applyMask(input.value);
+  });
+})();
+</script>
 {% endblock %}
