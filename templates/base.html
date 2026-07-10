@@ -87,6 +87,12 @@ a:hover { text-decoration: underline; }
   width: 22px; min-width:22px; text-align:center; display:inline-flex; align-items:center; justify-content:center;
 }
 .sidebar-icon i { font-size: 18px; color: #C9A227; opacity: .9; }
+.sidebar-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #b42318; color: #fff; font-size: 10px; font-weight: 800;
+  min-width: 16px; height: 16px; border-radius: 99px; padding: 0 4px;
+  margin-left: 6px; line-height: 1;
+}
 .content-shell { flex:1; min-width:0; display:flex; flex-direction:column; }
 .topbar {
   position: sticky; top: 0; z-index: 10;
@@ -435,7 +441,7 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
             <a class="sidebar-link {% if '/transactions/nfe/lote/' in request.path %}is-active{% endif %}" href="/transactions/nfe/lote/"><span class="sidebar-icon"><i class="ti ti-file-import" aria-hidden="true"></i></span><span class="sidebar-link-text">Importar NF-e</span></a>
             <a class="sidebar-link {% if '/transactions/sales/' in request.path %}is-active{% endif %}" href="/transactions/sales/"><span class="sidebar-icon"><i class="ti ti-arrow-up-circle" aria-hidden="true"></i></span><span class="sidebar-link-text">Saídas</span></a>
             <a class="sidebar-link {% if '/transactions/transformations/' in request.path %}is-active{% endif %}" href="/transactions/transformations/"><span class="sidebar-icon"><i class="ti ti-stack-2" aria-hidden="true"></i></span><span class="sidebar-link-text">Transformações</span></a>
-            <a class="sidebar-link {% if '/compliance/' in request.path %}is-active{% endif %}" href="/compliance/fechamentos/"><span class="sidebar-icon"><i class="ti ti-calendar-event" aria-hidden="true"></i></span><span class="sidebar-link-text">Fechamentos</span></a>
+            <a class="sidebar-link {% if '/compliance/' in request.path %}is-active{% endif %}" href="/compliance/fechamentos/"><span class="sidebar-icon"><i class="ti ti-calendar-event" aria-hidden="true"></i></span><span class="sidebar-link-text">Fechamentos{% if pendencias_count > 0 %}<span class="sidebar-badge">{{ pendencias_count }}</span>{% endif %}</span></a>
             <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon"><i class="ti ti-paperclip" aria-hidden="true"></i></span><span class="sidebar-link-text">Documentos</span></a>
             <a class="sidebar-link {% if '/reports/import/' in request.path %}is-active{% endif %}" href="/reports/import/"><span class="sidebar-icon"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i></span><span class="sidebar-link-text">Importar planilha</span></a>
           </nav>
@@ -500,7 +506,7 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
         <div class="sidebar-section">
           <div class="sidebar-label">Controle · Cadeia de Custódia</div>
           <nav class="sidebar-nav">
-            <a class="sidebar-link {% if '/compliance/gestor/' in request.path %}is-active{% endif %}" href="/compliance/gestor/fechamentos/"><span class="sidebar-icon"><i class="ti ti-circle-check" aria-hidden="true"></i></span><span class="sidebar-link-text">Fechamentos</span></a>
+            <a class="sidebar-link {% if '/compliance/gestor/' in request.path %}is-active{% endif %}" href="/compliance/gestor/fechamentos/"><span class="sidebar-icon"><i class="ti ti-circle-check" aria-hidden="true"></i></span><span class="sidebar-link-text">Fechamentos{% if pendencias_count > 0 %}<span class="sidebar-badge">{{ pendencias_count }}</span>{% endif %}</span></a>
             <a class="sidebar-link {% if '/transactions/gestor/dados/' in request.path %}is-active{% endif %}" href="/transactions/gestor/dados/"><span class="sidebar-icon"><i class="ti ti-trash" aria-hidden="true"></i></span><span class="sidebar-link-text">Gerenciar dados</span></a>
             <a class="sidebar-link {% if '/transactions/documents/' in request.path %}is-active{% endif %}" href="/transactions/documents/"><span class="sidebar-icon"><i class="ti ti-paperclip" aria-hidden="true"></i></span><span class="sidebar-link-text">Documentos</span></a>
             <a class="sidebar-link {% if '/reports/traceability/' in request.path %}is-active{% endif %}" href="/reports/traceability/"><span class="sidebar-icon"><i class="ti ti-search" aria-hidden="true"></i></span><span class="sidebar-link-text">Rastreabilidade</span></a>

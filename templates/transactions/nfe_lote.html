@@ -14,10 +14,13 @@
     <i class="ti ti-file-type-xml lote-drop-icon" aria-hidden="true"></i>
     <p class="lote-drop-title">Arraste os arquivos XML aqui</p>
     <p class="lote-drop-sub">ou clique para selecionar vários arquivos de uma vez</p>
-    <label class="lote-upload-btn">
-      <i class="ti ti-upload" aria-hidden="true"></i> Selecionar XMLs
+    <label class="lote-upload-btn" id="lote-upload-label">
+      <div class="lote-spin"></div>
+      <span class="lote-upload-static"><i class="ti ti-upload" id="lote-upload-icon" aria-hidden="true"></i></span>
+      <span id="lote-upload-text">Selecionar XMLs</span>
       <input type="file" id="xml-files-input" accept=".xml" multiple style="display:none;">
     </label>
+    <p class="lote-loading-msg" id="lote-loading-msg">Analisando os XMLs — aguarde alguns instantes...</p>
   </div>
 
   <div id="lote-defaults" style="display:none;">
@@ -85,7 +88,16 @@
 .lote-drop-icon { font-size: 36px; color: #0F5F57; display: block; margin-bottom: 10px; }
 .lote-drop-title { font-size: 15px; font-weight: 700; color: #0C3F3A; margin: 0 0 4px; }
 .lote-drop-sub { font-size: 13px; color: #0F6E56; margin: 0 0 14px; }
-.lote-upload-btn { display: inline-flex; align-items: center; gap: 6px; background: #0F5F57; color: #fff; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.lote-upload-btn { display: inline-flex; align-items: center; gap: 6px; background: #0F5F57; color: #fff; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s; }
+.lote-upload-btn.loading { background: #5a9b93; cursor: not-allowed; pointer-events: none; }
+.lote-spin { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: lote-spin .7s linear infinite; flex-shrink: 0; display: none; }
+.lote-upload-btn.loading .lote-spin { display: block; }
+.lote-upload-btn.loading .lote-upload-static { display: none; }
+@keyframes lote-spin { to { transform: rotate(360deg); } }
+.lote-loading-msg { display: none; font-size: 13px; color: #0F5F57; font-weight: 600; margin-top: 10px; }
+#drop-zone.loading .lote-loading-msg { display: block; }
+#drop-zone.loading .lote-drop-sub { display: none; }
+#drop-zone.loading { background: #f0faf6; border-color: #9FE1CB; }
 .lote-defaults-bar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
 .lote-defaults-label { font-size: 12px; font-weight: 700; color: #0f2a35; display: block; margin-bottom: 6px; }
 .lote-defaults-bar select { width: 100%; padding: 9px 12px; border: 1px solid #cce3dc; border-radius: 9px; font-size: 13px; color: #0f2a35; background: #fff; }
@@ -133,8 +145,27 @@
   });
   input.addEventListener('change', function() { processFiles(Array.from(input.files)); input.value = ''; });
 
+  function setLoading(files) {
+    var label = document.getElementById('lote-upload-label');
+    var text = document.getElementById('lote-upload-text');
+    var dz = document.getElementById('drop-zone');
+    if (label) label.classList.add('loading');
+    if (text) text.textContent = 'Lendo ' + files.length + ' arquivo' + (files.length > 1 ? 's' : '') + '...';
+    if (dz) dz.classList.add('loading');
+  }
+
+  function clearLoading() {
+    var label = document.getElementById('lote-upload-label');
+    var text = document.getElementById('lote-upload-text');
+    var dz = document.getElementById('drop-zone');
+    if (label) label.classList.remove('loading');
+    if (text) text.textContent = 'Selecionar XMLs';
+    if (dz) dz.classList.remove('loading');
+  }
+
   function processFiles(files) {
     if (!files.length) return;
+    setLoading(files);
     var fd = new FormData();
     files.forEach(function(f) { fd.append('xml_files', f); });
     fd.append('csrfmiddlewaretoken', getCsrf());
@@ -142,12 +173,16 @@
     fetch('{% url "nfe_parse_lote" %}', { method: 'POST', body: fd })
       .then(function(r) { return r.json(); })
       .then(function(d) {
+        clearLoading();
         if (d.error) { alert('Erro: ' + d.error); return; }
         rows = rows.concat(d.itens);
         renderTable();
         defaultsSection.style.display = 'block';
       })
-      .catch(function() { alert('Falha na comunicação com o servidor.'); })
+      .catch(function() {
+        clearLoading();
+        alert('Falha na comunicação com o servidor.');
+      })
       .finally(function() { btnImportar.disabled = false; });
   }
 

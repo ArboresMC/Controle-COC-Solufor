@@ -4,7 +4,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Sum, Q
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
@@ -1140,3 +1140,34 @@ def importar_nfe_lote_view(request):
             erros.append(f'NF-e {entrada.get("nf", i+1)}: {exc}')
 
     return JsonResponse({'criadas': criadas, 'erros': erros})
+
+
+def exportar_saldo_csv(request):
+    """Exporta o saldo elegível atual do participante em formato CSV."""
+    if not request.user.is_authenticated:
+        return redirect('login')
+    participant = getattr(request.user, 'participant', None)
+    if not participant:
+        return redirect('dashboard')
+
+    import csv
+    from datetime import date as _date
+
+    items = get_balance_items(participant, projected=False)
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    nome_arquivo = (participant.trade_name or participant.legal_name or 'participante').replace(' ', '_')
+    response['Content-Disposition'] = f'attachment; filename="saldo_{nome_arquivo}_{_date.today()}.csv"'
+    response.write('\ufeff')  # BOM para Excel reconhecer UTF-8
+
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow(['Participante', 'Produto', 'Saldo Elegivel', 'Unidade', 'Status'])
+    nome = participant.trade_name or participant.legal_name or ''
+    for item in items:
+        status = {'success': 'Normal', 'warning': 'Baixo', 'danger': 'Critico'}.get(item['status_class'], '')
+        writer.writerow([nome, item['product'], str(item['balance']).replace('.', ','), item['unit'], status])
+
+    if not items:
+        writer.writerow([nome, 'Nenhum saldo registrado', '', '', ''])
+
+    return response
