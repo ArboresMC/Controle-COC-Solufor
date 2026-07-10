@@ -257,6 +257,11 @@
       <h2 class="card-title">Saldo atual</h2>
       <p class="card-subtitle">Considera todos os lançamentos e transformações registrados.</p>
     </div>
+    {% if balance_items %}
+    <a href="{% url 'exportar_saldo_csv' %}" class="btn secondary" style="white-space:nowrap;">
+      <i class="ti ti-download" aria-hidden="true"></i> Exportar CSV
+    </a>
+    {% endif %}
   </div>
   {% if balance_items %}
   <div class="table-wrap compact-table">
