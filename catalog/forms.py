@@ -6,7 +6,7 @@ from .models import Product, Counterparty, ProductUnitConversion, ProductTransfo
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ['name', 'category', 'unit', 'fsc_applicable', 'default_claim', 'active']
+        fields = ['name', 'unit', 'fsc_applicable', 'default_claim', 'active']
         labels = {'unit': 'Unidade base de controle'}
 
 
