@@ -240,6 +240,9 @@ function setSelected(ids) {
 }
 function clearSelection() {
   sessionStorage.removeItem(STORAGE_KEY);
+  document.querySelectorAll('.row-check').forEach(cb => { cb.checked = false; });
+  const headerCb = document.querySelector('input[type="checkbox"][onchange*="togglePageAll"]');
+  if (headerCb) headerCb.checked = false;
   updateCount();
 }
 
