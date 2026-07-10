@@ -1,6 +1,54 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card"><div class="listing-head"><div><div class="kicker">Acesso</div><h2 class="card-title">Usuários</h2><p class="card-subtitle">Controle de perfis, participantes vinculados e ativação de acesso.</p></div><a class="btn" href="/users/new/">Novo usuário</a></div>
-{% if users %}<div class="table-wrap"><table><tr><th>Usuário</th><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Participante</th><th>Ativo</th><th></th></tr>{% for u in users %}<tr><td><strong>{{ u.username }}</strong></td><td>{{ u.first_name }} {{ u.last_name }}</td><td>{{ u.email|default:'-' }}</td><td>{{ u.get_role_display }}</td><td>{{ u.participant|default:'-' }}</td><td>{% if u.is_active %}<span class="badge success">Ativo</span>{% else %}<span class="badge danger">Inativo</span>{% endif %}</td><td><a class="inline-link" href="/users/{{ u.id }}/edit/">Editar</a></td></tr>{% endfor %}</table></div>{% else %}<div class="empty-state">Nenhum usuário cadastrado.</div>{% endif %}
+<div class="card">
+  <div class="listing-head">
+    <div><div class="kicker">Acesso</div><h2 class="card-title">Usuários</h2><p class="card-subtitle">Controle de perfis, participantes vinculados e ativação de acesso.</p></div>
+    <a class="btn" href="/users/new/">Novo usuário</a>
+  </div>
+  {% if users %}
+  <div class="table-wrap"><table style="table-layout:fixed; width:100%;">
+    <tr>
+      <th style="width:14%;">Usuário</th>
+      <th style="width:18%;">E-mail</th>
+      <th style="width:12%;">Perfil</th>
+      <th style="width:18%;">Participante</th>
+      <th style="width:14%;">Módulos</th>
+      <th style="width:10%;">Status</th>
+      <th style="width:7%;"></th>
+    </tr>
+    {% for u in users %}
+    <tr>
+      <td><strong>{{ u.username }}</strong></td>
+      <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ u.email|default:'-' }}</td>
+      <td>
+        {% if u.is_manager %}
+          <span class="badge" style="background:#f0eafc; color:#4a1d96;">Gestor</span>
+        {% elif u.is_auditor %}
+          <span class="badge warning">Auditor</span>
+        {% else %}
+          <span class="badge success">Participante</span>
+        {% endif %}
+      </td>
+      <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ u.participant|default:'-' }}</td>
+      <td style="white-space:nowrap;">
+        {% if u.participant %}
+          {% if u.participant.ativo_coc %}<span class="badge" style="background:#E1F5EE; color:#085041; margin-right:3px;">CoC</span>{% endif %}
+          {% if u.participant.ativo_fm %}<span class="badge" style="background:#E1F0FA; color:#0C3478;">FM</span>{% endif %}
+          {% if not u.participant.ativo_coc and not u.participant.ativo_fm %}<span style="color:var(--muted);">—</span>{% endif %}
+        {% else %}
+          <span style="color:var(--muted);">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if u.is_active %}<span class="badge success">Ativo</span>
+        {% else %}<span class="badge danger">Inativo</span>{% endif %}
+      </td>
+      <td><a class="inline-link" href="/users/{{ u.id }}/edit/">Editar</a></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <div class="empty-state">Nenhum usuário cadastrado.</div>
+  {% endif %}
 </div>
 {% endblock %}
