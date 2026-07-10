@@ -6,28 +6,42 @@
     <a class="btn" href="/participants/new/">Novo participante</a>
   </div>
   {% if participants %}
-  <div class="table-wrap"><table>
+  <div class="filter-bar">
+    <span class="filter-label">Filtrar:</span>
+    <button class="filter-btn active" data-filter="all">Todos</button>
+    <div class="filter-sep"></div>
+    <button class="filter-btn" data-filter="active">Ativos</button>
+    <button class="filter-btn" data-filter="inactive">Inativos</button>
+    <div class="filter-sep"></div>
+    <button class="filter-btn" data-filter="coc">CoC</button>
+    <button class="filter-btn" data-filter="fm">FM</button>
+    <button class="filter-btn" data-filter="both">CoC + FM</button>
+    <span class="filter-count" id="p-count"></span>
+  </div>
+  <div class="table-wrap"><table id="p-table" style="table-layout:fixed; width:100%;">
     <tr>
-      <th>Nome</th>
-      <th>CNPJ</th>
-      <th>Status</th>
-      <th>Módulos</th>
-      <th>Responsável</th>
-      <th>E-mail</th>
-      <th></th>
+      <th style="width:28%;">Nome</th>
+      <th style="width:18%;">CNPJ</th>
+      <th style="width:10%;">Status</th>
+      <th style="width:13%;">Módulos</th>
+      <th style="width:15%;">Responsável</th>
+      <th style="width:13%;">E-mail</th>
+      <th style="width:6%;"></th>
     </tr>
     {% for p in participants %}
-    <tr>
+    <tr data-status="{{ p.status }}"
+        data-coc="{% if p.ativo_coc %}1{% else %}0{% endif %}"
+        data-fm="{% if p.ativo_fm %}1{% else %}0{% endif %}">
       <td><strong>{{ p }}</strong></td>
-      <td>{{ p.cnpj }}</td>
+      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p.cnpj }}</td>
       <td><span class="badge {% if p.status == 'active' %}success{% elif p.status == 'suspended' %}danger{% else %}neutral{% endif %}">{{ p.get_status_display }}</span></td>
       <td style="white-space:nowrap;">
-        {% if p.ativo_coc %}<span class="badge success" style="margin-right:4px;">CoC</span>{% endif %}
-        {% if p.ativo_fm %}<span class="badge" style="background:#E1F5EE; color:#0C3F3A; margin-right:4px;">FM</span>{% endif %}
-        {% if not p.ativo_coc and not p.ativo_fm %}<span class="badge neutral">—</span>{% endif %}
+        {% if p.ativo_coc %}<span class="badge" style="background:#E1F5EE;color:#085041;margin-right:3px;">CoC</span>{% endif %}
+        {% if p.ativo_fm %}<span class="badge" style="background:#E1F0FA;color:#0C3478;">FM</span>{% endif %}
+        {% if not p.ativo_coc and not p.ativo_fm %}<span style="color:var(--muted);">—</span>{% endif %}
       </td>
-      <td>{{ p.contact_name|default:'-' }}</td>
-      <td>{{ p.contact_email|default:'-' }}</td>
+      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p.contact_name|default:'-' }}</td>
+      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p.contact_email|default:'-' }}</td>
       <td><a class="inline-link" href="/participants/{{ p.id }}/edit/">Editar</a></td>
     </tr>
     {% endfor %}
@@ -36,4 +50,44 @@
   <div class="empty-state">Nenhum participante cadastrado.</div>
   {% endif %}
 </div>
+<style>
+.filter-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px; padding-bottom:14px; border-bottom:0.5px solid var(--line); }
+.filter-label { font-size:12px; color:var(--muted); margin-right:2px; }
+.filter-btn { font-size:12px; font-weight:500; padding:5px 12px; border-radius:99px; border:0.5px solid var(--line); background:var(--panel-soft); color:var(--muted); cursor:pointer; transition:all .12s; }
+.filter-btn:hover { border-color:var(--primary); color:var(--primary); }
+.filter-btn.active { background:#E1F5EE; color:#085041; border-color:#9FE1CB; font-weight:700; }
+.filter-sep { width:0.5px; height:18px; background:var(--line); margin:0 2px; }
+.filter-count { margin-left:auto; font-size:12px; color:var(--muted); }
+</style>
+<script>
+(function() {
+  var table = document.getElementById('p-table');
+  if (!table) return;
+  var rows = Array.from(table.querySelectorAll('tr[data-status]'));
+  var count = document.getElementById('p-count');
+  function update(filter) {
+    var n = 0;
+    rows.forEach(function(r) {
+      var show = false;
+      if (filter === 'all') show = true;
+      else if (filter === 'active') show = r.dataset.status === 'active';
+      else if (filter === 'inactive') show = r.dataset.status !== 'active';
+      else if (filter === 'coc') show = r.dataset.coc === '1';
+      else if (filter === 'fm') show = r.dataset.fm === '1';
+      else if (filter === 'both') show = r.dataset.coc === '1' && r.dataset.fm === '1';
+      r.style.display = show ? '' : 'none';
+      if (show) n++;
+    });
+    if (count) count.textContent = n + ' participante(s)';
+  }
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      update(btn.dataset.filter);
+    });
+  });
+  update('all');
+})();
+</script>
 {% endblock %}
