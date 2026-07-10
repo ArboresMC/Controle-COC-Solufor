@@ -8,7 +8,6 @@ from .views import (
     BillingReportView, BillingTierUpdateView,
     parse_nfe_view,
     NfeLoteView, parse_nfe_lote_view, importar_nfe_lote_view,
-    exportar_saldo_csv,
 )
 
 urlpatterns = [
@@ -31,5 +30,4 @@ urlpatterns = [
     path('nfe/lote/', NfeLoteView.as_view(), name='nfe_lote'),
     path('nfe/lote/parse/', parse_nfe_lote_view, name='nfe_parse_lote'),
     path('nfe/lote/importar/', importar_nfe_lote_view, name='nfe_importar_lote'),
-    path('saldo/exportar/', exportar_saldo_csv, name='exportar_saldo_csv'),
 ]
