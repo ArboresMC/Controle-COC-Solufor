@@ -754,25 +754,24 @@ class DataDeleteSingleView(ManagerRequiredMixin, View):
 class BillingReportView(ManagerRequiredMixin, TemplateView):
     template_name = 'transactions/billing_report.html'
 
-    # Limites de cada faixa (fixos). O valor em R$ vem do banco (BillingTier);
-    # estes defaults só são usados se uma faixa esperada não existir ainda.
-    # Faixas estendidas em 25/06/2026: antes o teto era plano (ex.: "acima de 20 = R$180"
-    # para sempre); agora a régua continua crescendo para clientes maiores, evitando
-    # subprecificar quem mais usa o sistema.
-    LIMITES_FM = [3, 10, 20, 40, None]
-    LIMITES_COC = [20, 50, 100, None]
-    DEFAULTS_FM = [25, 60, 110, 180, 280]
-    DEFAULTS_COC = [30, 70, 120, 200]
+    # CoC: dois perfis fixos — Trader (sem transformações) e Produção (com transformações)
+    PRECO_COC_TRADER = 190
+    PRECO_COC_PRODUCAO = 360
 
-    def _faixas_com_valores(self, modulo, limites, defaults):
-        tiers = {t.ordem: t.valor for t in BillingTier.objects.filter(modulo=modulo)}
+    # FM: escalonado por número de propriedades ativas
+    LIMITES_FM = [3, 10, 20, 40, None]
+    DEFAULTS_FM = [80, 160, 210, 250, 350]
+
+    def _faixas_fm_com_valores(self):
+        from compliance.models import BillingTier
+        tiers = {t.ordem: t.valor for t in BillingTier.objects.filter(modulo=BillingTier.MODULO_FM)}
         faixas = []
-        for i, limite in enumerate(limites, start=1):
-            valor = tiers.get(i, defaults[i - 1])
+        for i, limite in enumerate(self.LIMITES_FM, start=1):
+            valor = tiers.get(i, self.DEFAULTS_FM[i - 1])
             faixas.append({'ordem': i, 'limite': limite, 'valor': valor})
         return faixas
 
-    def _valor_por_faixa(self, count, faixas):
+    def _valor_fm_por_faixa(self, count, faixas):
         for faixa in faixas:
             if faixa['limite'] is None or count <= faixa['limite']:
                 return faixa['valor']
@@ -785,35 +784,41 @@ class BillingReportView(ManagerRequiredMixin, TemplateView):
         current_org = getattr(user, 'current_organization', None)
         today = date.today()
 
-        faixas_fm = self._faixas_com_valores(BillingTier.MODULO_FM, self.LIMITES_FM, self.DEFAULTS_FM)
-        faixas_coc = self._faixas_com_valores(BillingTier.MODULO_COC, self.LIMITES_COC, self.DEFAULTS_COC)
+        faixas_fm = self._faixas_fm_com_valores()
 
         participants = Participant.objects.filter(status='active')
         participants = participants.filter(organization=current_org) if current_org else Participant.objects.none()
 
         rows = []
         total_mensalidade = 0
+
         for p in participants.order_by('trade_name', 'legal_name'):
             valor_coc = 0
             valor_fm = 0
             detalhe_partes = []
+            perfil_coc = None
 
             if p.ativo_coc:
-                mov_count = (
-                    EntryRecord.objects.filter(
-                        participant=p, movement_date__year=today.year, movement_date__month=today.month
-                    ).count()
-                    + SaleRecord.objects.filter(
-                        participant=p, movement_date__year=today.year, movement_date__month=today.month
-                    ).count()
-                )
-                valor_coc = self._valor_por_faixa(mov_count, faixas_coc)
-                detalhe_partes.append(f"CoC: {mov_count} mov./mês")
+                # Verifica se usou transformações no mês → Produção, senão → Trader
+                usou_transformacao = TransformationRecord.objects.filter(
+                    participant=p,
+                    movement_date__year=today.year,
+                    movement_date__month=today.month,
+                ).exists()
+
+                if usou_transformacao:
+                    perfil_coc = 'Produção'
+                    valor_coc = self.PRECO_COC_PRODUCAO
+                else:
+                    perfil_coc = 'Trader'
+                    valor_coc = self.PRECO_COC_TRADER
+
+                detalhe_partes.append(f'CoC: {perfil_coc}')
 
             if p.ativo_fm:
                 prop_count = Propriedade.objects.filter(participant=p, ativa=True).count()
-                valor_fm = self._valor_por_faixa(prop_count, faixas_fm)
-                detalhe_partes.append(f"FM: {prop_count} propriedade(s)")
+                valor_fm = self._valor_fm_por_faixa(prop_count, faixas_fm)
+                detalhe_partes.append(f'FM: {prop_count} propriedade(s)')
 
             valor_total = valor_coc + valor_fm
             total_mensalidade += valor_total
@@ -822,6 +827,7 @@ class BillingReportView(ManagerRequiredMixin, TemplateView):
                 'participant': p,
                 'ativo_coc': p.ativo_coc,
                 'ativo_fm': p.ativo_fm,
+                'perfil_coc': perfil_coc,
                 'valor_coc': valor_coc,
                 'valor_fm': valor_fm,
                 'valor_total': valor_total,
@@ -832,7 +838,8 @@ class BillingReportView(ManagerRequiredMixin, TemplateView):
             'rows': rows,
             'total_mensalidade': total_mensalidade,
             'faixas_fm': faixas_fm,
-            'faixas_coc': faixas_coc,
+            'preco_coc_trader': self.PRECO_COC_TRADER,
+            'preco_coc_producao': self.PRECO_COC_PRODUCAO,
             'competencia': today,
         })
         return ctx

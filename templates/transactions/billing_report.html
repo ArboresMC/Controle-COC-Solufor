@@ -1,54 +1,60 @@
 {% extends "base.html" %}
 {% block hero_title %}Faturamento sugerido{% endblock %}
-{% block hero_text %}<p class="page-note"><i class="ti ti-info-circle" aria-hidden="true"></i>Régua de cobrança baseada em propriedades (Manejo Florestal) e movimentações mensais (Cadeia de Custódia).</p>{% endblock %}
+{% block hero_text %}<p class="page-note"><i class="ti ti-info-circle" aria-hidden="true"></i>CoC cobrado por perfil operacional (Trader ou Produção) detectado automaticamente no mês. FM escalonado por propriedades ativas.</p>{% endblock %}
 {% block content %}
 
-<form method="post" action="{% url 'billing_tier_update' %}">
-  {% csrf_token %}
-  <div class="card soft" style="margin-bottom:18px;">
+<div class="dashboard-grid-2 even" style="margin-bottom:18px;">
+  <div class="card soft">
     <div class="card-header">
       <div>
-        <div class="kicker">Faixas configuradas</div>
-        <h2 class="card-title">Como o valor é calculado</h2>
-        <p class="card-subtitle">Os limites de cada faixa são fixos. Edite apenas o valor mensal e clique em salvar.</p>
+        <div class="kicker">Cadeia de Custódia</div>
+        <h2 class="card-title">Perfil por operação</h2>
+        <p class="card-subtitle">Detectado automaticamente: usou transformação no mês → Produção.</p>
       </div>
-      <button type="submit" class="btn">Salvar valores das faixas</button>
     </div>
-    <div class="dashboard-grid-2 even">
-      <div class="info-box">
-        <strong>Cadeia de Custódia (por movimentações/mês)</strong>
-        <div class="stack" style="margin-top:8px;">
-          {% for faixa in faixas_coc %}
-          <div class="summary-pill">
-            <strong>{% if faixa.limite %}Até {{ faixa.limite }}{% else %}Acima do limite anterior{% endif %}</strong>
-            <span>R$ <input type="text" name="valor_coc_{{ faixa.ordem }}" value="{{ faixa.valor }}" style="width:70px;" inputmode="decimal">/mês</span>
-          </div>
-          {% endfor %}
-        </div>
+    <div class="stack">
+      <div class="summary-pill">
+        <strong>Trader <span class="muted" style="font-weight:400;">(só Entradas + Saídas)</span></strong>
+        <span style="font-size:15px; font-weight:700; color:var(--primary);">R$ {{ preco_coc_trader }}/mês</span>
       </div>
-      <div class="info-box">
-        <strong>Manejo Florestal (por propriedades ativas)</strong>
-        <div class="stack" style="margin-top:8px;">
-          {% for faixa in faixas_fm %}
-          <div class="summary-pill">
-            <strong>{% if faixa.limite %}Até {{ faixa.limite }}{% else %}Acima do limite anterior{% endif %}</strong>
-            <span>R$ <input type="text" name="valor_fm_{{ faixa.ordem }}" value="{{ faixa.valor }}" style="width:70px;" inputmode="decimal">/mês</span>
-          </div>
-          {% endfor %}
-        </div>
+      <div class="summary-pill">
+        <strong>Produção <span class="muted" style="font-weight:400;">(usa Transformações)</span></strong>
+        <span style="font-size:15px; font-weight:700; color:var(--primary);">R$ {{ preco_coc_producao }}/mês</span>
       </div>
     </div>
   </div>
-</form>
+
+  <form method="post" action="{% url 'billing_tier_update' %}">
+    {% csrf_token %}
+    <div class="card soft">
+      <div class="card-header">
+        <div>
+          <div class="kicker">Manejo Florestal</div>
+          <h2 class="card-title">Faixas por propriedades</h2>
+          <p class="card-subtitle">Edite o valor mensal e salve.</p>
+        </div>
+        <button type="submit" class="btn">Salvar</button>
+      </div>
+      <div class="stack">
+        {% for faixa in faixas_fm %}
+        <div class="summary-pill">
+          <strong>{% if faixa.limite %}Até {{ faixa.limite }} prop.{% else %}Acima do anterior{% endif %}</strong>
+          <span>R$ <input type="text" name="valor_fm_{{ faixa.ordem }}" value="{{ faixa.valor }}" style="width:70px;" inputmode="decimal">/mês</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </form>
+</div>
 
 <div class="card">
   <div class="card-header">
     <div>
       <div class="kicker">Competência {{ competencia|date:"m/Y" }}</div>
-      <h2 class="card-title">Régua de cobrança por participante</h2>
-      <p class="card-subtitle">Valores sugeridos com base no uso real de cada participante neste mês.</p>
+      <h2 class="card-title">Cobrança por participante</h2>
+      <p class="card-subtitle">Perfil CoC calculado com base nas movimentações deste mês.</p>
     </div>
-    <span class="badge success">Total sugerido: R$ {{ total_mensalidade }}/mês</span>
+    <span class="badge success" style="font-size:14px;">Total: R$ {{ total_mensalidade }}/mês</span>
   </div>
 
   {% if rows %}
@@ -57,7 +63,7 @@
       <tr>
         <th>Participante</th>
         <th>Módulos</th>
-        <th>Detalhe de uso</th>
+        <th>Perfil CoC</th>
         <th>CoC</th>
         <th>FM</th>
         <th>Total/mês</th>
@@ -65,11 +71,19 @@
       {% for row in rows %}
       <tr>
         <td><strong>{{ row.participant }}</strong></td>
-        <td>
-          {% if row.ativo_coc %}<span class="badge neutral">CoC</span>{% endif %}
-          {% if row.ativo_fm %}<span class="badge success">FM</span>{% endif %}
+        <td style="white-space:nowrap;">
+          {% if row.ativo_coc %}<span class="badge" style="background:#E1F5EE;color:#085041;margin-right:3px;">CoC</span>{% endif %}
+          {% if row.ativo_fm %}<span class="badge" style="background:#E1F0FA;color:#0C3478;">FM</span>{% endif %}
         </td>
-        <td class="muted">{{ row.detalhe }}</td>
+        <td>
+          {% if row.perfil_coc == 'Produção' %}
+            <span class="badge warning">Produção</span>
+          {% elif row.perfil_coc == 'Trader' %}
+            <span class="badge neutral">Trader</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
         <td>{% if row.valor_coc %}R$ {{ row.valor_coc }}{% else %}—{% endif %}</td>
         <td>{% if row.valor_fm %}R$ {{ row.valor_fm }}{% else %}—{% endif %}</td>
         <td><strong>R$ {{ row.valor_total }}</strong></td>
