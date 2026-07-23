@@ -546,13 +546,15 @@ input:invalid, select:invalid, textarea:invalid { border-color: var(--danger); }
           {% if user.is_authenticated %}
           <button id="mobileSidebarToggle" class="topbar-mobile-toggle" type="button" aria-label="Abrir menu">☰</button>
           {% endif %}
-          <span style="display:inline-flex; align-items:center; flex-shrink:0;">
-            <img src="{% static 'img/brand/icone-branco.svg' %}" alt="TraceFlor" style="height:36px; width:36px; display:block;">
-          </span>
-          <span class="topbar-copy">
-            <strong style="font-family:'Space Grotesk', sans-serif; font-size:17px; letter-spacing:-0.3px;">TraceFlor</strong>
-            <span>Controle operacional de cadeia de custódia, conversões, rastreabilidade e saldo elegível</span>
-          </span>
+          <a href="{% url 'dashboard' %}" style="display:inline-flex; align-items:center; gap:12px; text-decoration:none; flex-shrink:0;">
+            <span style="display:inline-flex; align-items:center; flex-shrink:0;">
+              <img src="{% static 'img/brand/icone-branco.svg' %}" alt="TraceFlor" style="height:36px; width:36px; display:block;">
+            </span>
+            <span class="topbar-copy">
+              <strong style="font-family:'Space Grotesk', sans-serif; font-size:17px; letter-spacing:-0.3px;">TraceFlor</strong>
+              <span>Controle operacional de cadeia de custódia, conversões, rastreabilidade e saldo elegível</span>
+            </span>
+          </a>
         </div>
         {% if user.is_authenticated %}
         <div class="userbox-compact">
